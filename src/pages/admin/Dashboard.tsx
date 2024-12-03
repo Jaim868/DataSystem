@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, Row, Col, Statistic } from 'antd';
-import { Line, Column, Pie } from '@ant-design/charts';
 import { ShoppingCartOutlined, UserOutlined, DollarOutlined, InboxOutlined } from '@ant-design/icons';
+import { Line, Column, Pie } from '@ant-design/plots';
 
 const Dashboard = () => {
   // 销售趋势数据
@@ -14,22 +14,49 @@ const Dashboard = () => {
     { month: '6月', sales: 6000 },
   ];
 
-  // 商品类别销售占比
-  const categoryData = [
-    { category: '鱼竿', value: 40 },
-    { category: '鱼线', value: 25 },
-    { category: '鱼钩', value: 20 },
-    { category: '其他配件', value: 15 },
-  ];
+  const lineOption = {
+    xAxis: {
+      type: 'category',
+      data: salesData.map(item => item.month)
+    },
+    yAxis: {
+      type: 'value'
+    },
+    series: [{
+      data: salesData.map(item => item.sales),
+      type: 'line'
+    }]
+  };
 
-  // 热销商品排行
-  const topProductsData = [
-    { product: '碳素鱼竿', sales: 120 },
-    { product: '进口渔线', sales: 86 },
-    { product: '专业鱼钩', sales: 72 },
-    { product: '渔具包', sales: 65 },
-    { product: '浮漂', sales: 53 },
-  ];
+  const pieOption = {
+    tooltip: {
+      trigger: 'item'
+    },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      data: [
+        { value: 40, name: '鱼竿' },
+        { value: 25, name: '鱼线' },
+        { value: 20, name: '鱼钩' },
+        { value: 15, name: '其他配件' }
+      ]
+    }]
+  };
+
+  const barOption = {
+    xAxis: {
+      type: 'category',
+      data: ['碳素鱼竿', '进口渔线', '专业鱼钩', '渔具包', '浮漂']
+    },
+    yAxis: {
+      type: 'value'
+    },
+    series: [{
+      data: [120, 86, 72, 65, 53],
+      type: 'bar'
+    }]
+  };
 
   return (
     <div>
@@ -75,34 +102,12 @@ const Dashboard = () => {
       <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
         <Col span={16}>
           <Card title="销售趋势">
-            <Line
-              data={salesData}
-              xField="month"
-              yField="sales"
-              point={{
-                size: 5,
-                shape: 'diamond',
-              }}
-              label={{
-                style: {
-                  fill: '#aaa',
-                },
-              }}
-            />
+            <Line option={lineOption} style={{ height: 300 }} />
           </Card>
         </Col>
         <Col span={8}>
           <Card title="商品类别销售占比">
-            <Pie
-              data={categoryData}
-              angleField="value"
-              colorField="category"
-              radius={0.8}
-              label={{
-                type: 'outer',
-                content: '{name} {percentage}',
-              }}
-            />
+            <Pie option={pieOption} style={{ height: 300 }} />
           </Card>
         </Col>
       </Row>
@@ -110,14 +115,7 @@ const Dashboard = () => {
       <Row style={{ marginTop: '16px' }}>
         <Col span={24}>
           <Card title="热销商品排行">
-            <Column
-              data={topProductsData}
-              xField="product"
-              yField="sales"
-              label={{
-                position: 'top',
-              }}
-            />
+            <Column option={barOption} style={{ height: 300 }} />
           </Card>
         </Col>
       </Row>
