@@ -6,12 +6,14 @@ import {
   ShoppingCartOutlined,
   InboxOutlined,
   ShopOutlined,
-  LogoutOutlined
+  LogoutOutlined,
+  DashboardOutlined
 } from '@ant-design/icons';
 import EmployeeManagement from '../pages/admin/EmployeeManagement';
 import OrderManagement from '../pages/admin/OrderManagement';
 import InventoryManagement from '../pages/admin/InventoryManagement';
 import ProductManagement from '../pages/admin/ProductManagement';
+import Dashboard from '../pages/admin/Dashboard';
 import { useNavigate } from 'react-router-dom';
 
 const { Header, Sider, Content } = Layout;
@@ -47,6 +49,9 @@ const AdminLayout: React.FC = () => {
             <Menu.Item key="products" icon={<ShopOutlined />}>
               <Link to="/admin/products">商品管理</Link>
             </Menu.Item>
+            <Menu.Item key="dashboard" icon={<DashboardOutlined />}>
+              <Link to="/admin/dashboard">仪表板</Link>
+            </Menu.Item>
           </Menu>
         </Sider>
         <Content style={{ padding: '24px', minHeight: 280 }}>
@@ -55,6 +60,7 @@ const AdminLayout: React.FC = () => {
             <Route path="/orders" element={<OrderManagement />} />
             <Route path="/inventory" element={<InventoryManagement />} />
             <Route path="/products" element={<ProductManagement />} />
+            <Route path="/dashboard" element={<Dashboard />} />
           </Routes>
         </Content>
       </Layout>
