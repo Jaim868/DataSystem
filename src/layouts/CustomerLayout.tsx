@@ -35,7 +35,15 @@ const CustomerLayout: React.FC = () => {
 
   return (
     <Layout>
-      <Header>
+      <Header style={{ display: 'flex', alignItems: 'center' }}>
+        <img 
+          src="/images/logo.png" 
+          alt="渔具商店" 
+          style={{ 
+            height: '40px', 
+            marginRight: '24px' 
+          }} 
+        />
         <Menu theme="dark" mode="horizontal" defaultSelectedKeys={['home']}>
           <Menu.Item key="home" icon={<HomeOutlined />}>
             <Link to="/customer/home">首页</Link>
