@@ -6,6 +6,7 @@ interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  image: string;
 }
 
 interface Order {
@@ -35,8 +36,21 @@ const Orders = () => {
       render: (items: OrderItem[]) => (
         <ul style={{ margin: 0, paddingLeft: 20 }}>
           {items.map((item, index) => (
-            <li key={index}>
-              {item.name} x {item.quantity} (¥{item.price})
+            <li key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <img 
+                src={`/images/products/${item.image}`}
+                alt={item.name}
+                style={{ 
+                  width: '50px', 
+                  height: '50px', 
+                  objectFit: 'cover',
+                  marginRight: '8px',
+                  borderRadius: '4px'
+                }}
+              />
+              <span>
+                {item.name} x {item.quantity} (¥{item.price})
+              </span>
             </li>
           ))}
         </ul>

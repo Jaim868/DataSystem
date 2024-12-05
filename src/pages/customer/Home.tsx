@@ -15,11 +15,12 @@ interface Product {
   features?: string[];
   stock: number;
   sales: number;
+  image: string;
 }
 
 const Home = () => {
   const navigate = useNavigate();
-  
+
   const banners = [
     'https://via.placeholder.com/1200x300/FF4D4F/FFFFFF?text=渔具特惠',
     'https://via.placeholder.com/1200x300/1890FF/FFFFFF?text=新品上市',
@@ -33,10 +34,11 @@ const Home = () => {
       price: 299,
       description: '采用高强度碳纤维材料，超轻设计，手感舒适',
       category: '鱼竿',
-      imageUrl: 'https://via.placeholder.com/200x200?text=碳素鱼竿',
+      imageUrl: 'https://example.com/rod.jpg',
       features: ['超轻设计', '高强度碳纤维', '防滑手柄'],
       stock: 50,
-      sales: 120
+      sales: 120,
+      image: 'fishing_rod_carbon.jpg'
     },
     {
       id: 2,
@@ -47,7 +49,8 @@ const Home = () => {
       imageUrl: 'https://via.placeholder.com/200x200?text=专业渔线',
       features: ['超强韧性', '防缠绕', '耐磨损'],
       stock: 200,
-      sales: 300
+      sales: 300,
+      image: 'fishing_line_pro.jpg'
     },
     {
       id: 3,
@@ -58,7 +61,8 @@ const Home = () => {
       imageUrl: 'https://via.placeholder.com/200x200?text=自动钓鱼竿',
       features: ['自动收线', '智能感应', '配件齐全'],
       stock: 30,
-      sales: 80
+      sales: 80,
+      image: 'fishing_rod_auto.jpg'
     },
     {
       id: 4,
@@ -69,7 +73,8 @@ const Home = () => {
       imageUrl: 'https://via.placeholder.com/200x200?text=鱼漂套装',
       features: ['夜光设计', '多规格', '高灵敏度'],
       stock: 150,
-      sales: 200
+      sales: 200,
+      image: 'fishing_float_set.jpg'
     },
     {
       id: 5,
@@ -80,7 +85,8 @@ const Home = () => {
       imageUrl: 'https://via.placeholder.com/200x200?text=鱼钩套装',
       features: ['锋利持久', '防锈处理', '多型号可选'],
       stock: 100,
-      sales: 180
+      sales: 180,
+      image: 'fishing_hook_set.jpg'
     },
     {
       id: 6,
@@ -91,7 +97,8 @@ const Home = () => {
       imageUrl: 'https://via.placeholder.com/200x200?text=渔具包',
       features: ['防水设计', '大容量', '多层收纳'],
       stock: 40,
-      sales: 90
+      sales: 90,
+      image: 'fishing_tackle_bag.jpg'
     },
     {
       id: 7,
@@ -102,7 +109,8 @@ const Home = () => {
       imageUrl: 'https://via.placeholder.com/200x200?text=报警器',
       features: ['声光报警', '防水设计', '灵敏可调'],
       stock: 60,
-      sales: 150
+      sales: 150,
+      image: 'fishing_hook_alarm.jpg'
     },
     {
       id: 8,
@@ -113,14 +121,15 @@ const Home = () => {
       imageUrl: 'https://via.placeholder.com/200x200?text=钓鱼椅',
       features: ['轻便折叠', '高承重', '带置物架'],
       stock: 45,
-      sales: 75
+      sales: 75,
+      image: 'fishing_chair_foldable.jpg'
     }
   ];
 
   const addToCart = (e: React.MouseEvent, product: Product) => {
     e.stopPropagation(); // 阻止事件冒泡
     const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    cart.push({...product, quantity: 1});
+    cart.push({ ...product, quantity: 1 });
     localStorage.setItem('cart', JSON.stringify(cart));
     message.success('已添加到购物车');
   };
@@ -129,11 +138,27 @@ const Home = () => {
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
       {/* 轮播图 */}
       <Carousel autoplay style={{ marginBottom: 24 }}>
-        {banners.map((banner, index) => (
-          <div key={index}>
-            <img src={banner} alt={`banner${index}`} style={{ width: '100%', height: 300 }} />
-          </div>
-        ))}
+        <div>
+          <img 
+            src="/images/banners/banner_sale.jpg" 
+            alt="特惠活动" 
+            style={{ width: '100%', height: '300px', objectFit: 'cover' }} 
+          />
+        </div>
+        <div>
+          <img 
+            src="/images/banners/banner_new.jpg" 
+            alt="新品上市" 
+            style={{ width: '100%', height: '300px', objectFit: 'cover' }} 
+          />
+        </div>
+        <div>
+          <img 
+            src="/images/banners/banner_discount.jpg" 
+            alt="限时折扣" 
+            style={{ width: '100%', height: '300px', objectFit: 'cover' }} 
+          />
+        </div>
       </Carousel>
 
       {/* 分类标题 */}
@@ -148,11 +173,18 @@ const Home = () => {
           <Col xs={24} sm={12} md={8} lg={6} key={product.id}>
             <Card
               hoverable
-              cover={<Image alt={product.name} src={product.imageUrl} />}
+              style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+              cover={
+                <img
+                  alt={product.name}
+                  src={`/images/products/${product.image}`}
+                  style={{ height: '200px', objectFit: 'cover' }}
+                />
+              }
               onClick={() => navigate(`/customer/product/${product.id}`)}
               actions={[
-                <Button 
-                  type="primary" 
+                <Button
+                  type="primary"
                   icon={<ShoppingCartOutlined />}
                   onClick={(e) => addToCart(e, product)}
                 >
@@ -170,12 +202,12 @@ const Home = () => {
                 description={
                   <>
                     <Paragraph ellipsis={{ rows: 2 }}>{product.description}</Paragraph>
-                    <div>
+                    <div style={{ marginBottom: 8 }}>
                       {product.features?.map((feature, index) => (
                         <Tag key={index} color="blue" style={{ marginBottom: 4 }}>{feature}</Tag>
                       ))}
                     </div>
-                    <div style={{ marginTop: 8 }}>
+                    <div>
                       <Tag color="orange">库存: {product.stock}</Tag>
                       <Tag color="green">销量: {product.sales}</Tag>
                     </div>

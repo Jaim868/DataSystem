@@ -14,16 +14,21 @@ const CustomerLayout: React.FC = () => {
 
   return (
     <Layout>
-      <Header>
+      <Header style={{ display: 'flex', alignItems: 'center' }}>
+        <img 
+          src="/images/logo.png" 
+          alt="渔具商店" 
+          style={{ 
+            height: '40px', 
+            marginRight: '24px' 
+          }} 
+        />
         <Menu theme="dark" mode="horizontal" defaultSelectedKeys={['home']}>
           <Menu.Item key="home" icon={<HomeOutlined />}>
             <Link to="/customer/home">首页</Link>
           </Menu.Item>
           <Menu.Item key="cart" icon={<ShoppingCartOutlined />}>
-            <Link to="/customer/cart">
-              购物车
-              <Badge count={cartItems.length} offset={[10, -5]} />
-            </Link>
+            <Link to="/customer/cart">购物车</Link>
           </Menu.Item>
           <Menu.Item key="orders" icon={<OrderedListOutlined />}>
             <Link to="/customer/orders">我的订单</Link>
