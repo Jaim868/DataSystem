@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Badge } from 'antd';
-import { Routes, Route, Link } from 'react-router-dom';
-import { ShoppingCartOutlined, HomeOutlined, OrderedListOutlined } from '@ant-design/icons';
+import { Layout, Menu, Badge, Button, Space } from 'antd';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { ShoppingCartOutlined, HomeOutlined, OrderedListOutlined, LogoutOutlined } from '@ant-design/icons';
 import Home from '../pages/customer/Home';
 import Cart from '../pages/customer/Cart';
 import Orders from '../pages/customer/Orders';
@@ -10,7 +10,10 @@ import ProductDetail from '../pages/customer/ProductDetail';
 const { Header, Content } = Layout;
 
 const CustomerLayout: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [cartCount, setCartCount] = useState(0);
+  const [selectedKey, setSelectedKey] = useState(location.pathname);
 
   // 监听购物车变化
   useEffect(() => {
@@ -33,25 +36,60 @@ const CustomerLayout: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    setSelectedKey(location.pathname);
+  }, [location.pathname]);
+
+  const items = [
+    {
+      key: '/customer/home',
+      label: '首页',
+    },
+    {
+      key: '/customer/cart',
+      label: (
+        <Link to="/customer/cart">
+          购物车
+          {cartCount > 0 && (
+            <Badge count={cartCount} offset={[10, -5]} />
+          )}
+        </Link>
+      ),
+    },
+    {
+      key: '/customer/orders',
+      label: '我的订单',
+    },
+  ];
+
+  const handleLogout = () => {
+    // 清除登录状态
+    localStorage.removeItem('isLoggedIn');
+    // 可选：清除其他需要清除的数据
+    localStorage.removeItem('cart');
+    // 跳转到登录页
+    navigate('/login');
+  };
+
   return (
     <Layout>
-      <Header>
-        <Menu theme="dark" mode="horizontal" defaultSelectedKeys={['home']}>
-          <Menu.Item key="home" icon={<HomeOutlined />}>
-            <Link to="/customer/home">首页</Link>
-          </Menu.Item>
-          <Menu.Item key="cart" icon={<ShoppingCartOutlined />}>
-            <Link to="/customer/cart">
-              购物车
-              {cartCount > 0 && (
-                <Badge count={cartCount} offset={[10, -5]} />
-              )}
-            </Link>
-          </Menu.Item>
-          <Menu.Item key="orders" icon={<OrderedListOutlined />}>
-            <Link to="/customer/orders">我的订单</Link>
-          </Menu.Item>
-        </Menu>
+      <Header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Menu
+          theme="dark"
+          mode="horizontal"
+          selectedKeys={[selectedKey]}
+          items={items}
+          onClick={({ key }) => navigate(key)}
+          style={{ flex: 1 }}
+        />
+        <Button 
+          type="link" 
+          icon={<LogoutOutlined />} 
+          onClick={handleLogout}
+          style={{ color: '#fff' }}
+        >
+          退出登录
+        </Button>
       </Header>
       <Content style={{ padding: '24px', minHeight: 280 }}>
         <Routes>

@@ -23,7 +23,7 @@ const Home = () => {
   
   const banners = [
     'https://via.placeholder.com/1200x300/FF4D4F/FFFFFF?text=渔具特惠',
-    'https://via.placeholder.com/1200x300/1890FF/FFFFFF?text=新品上市',
+    '/images/banners/newbanner.jpg',
     'https://via.placeholder.com/1200x300/52C41A/FFFFFF?text=限时折扣',
   ];
 

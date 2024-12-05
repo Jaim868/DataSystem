@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, InputNumber, Space, message, Card } from 'antd';
+import { Table, Button, InputNumber, Space, message, Card, Modal } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,6 +14,7 @@ interface CartItem {
 const Cart = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const navigate = useNavigate();
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     const items = JSON.parse(localStorage.getItem('cart') || '[]');
@@ -35,7 +36,11 @@ const Cart = () => {
     message.success('已从购物车移除');
   };
 
-  const checkout = () => {
+  const handleCheckout = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleConfirmOrder = () => {
     const order = {
       orderNo: `ORDER${Date.now()}`,
       items: cartItems,
@@ -56,6 +61,7 @@ const Cart = () => {
 
     message.success('下单成功！');
     navigate('/customer/orders');
+    setIsModalOpen(false);
   };
 
   const columns: ColumnsType<CartItem> = [
@@ -103,13 +109,28 @@ const Cart = () => {
           <span>总计: ¥{totalAmount.toFixed(2)}</span>
           <Button 
             type="primary" 
-            onClick={checkout}
+            onClick={handleCheckout}
             disabled={cartItems.length === 0}
           >
             结算
           </Button>
         </Space>
       </Card>
+      <Modal
+        title="确认订单"
+        open={isModalOpen}
+        onOk={handleConfirmOrder}
+        onCancel={() => setIsModalOpen(false)}
+        okText="确认下单"
+        cancelText="返回购物车"
+      >
+        <div>
+          <h3>订单信息确认</h3>
+          <p>商品总数：{cartItems.length}</p>
+          <p>总金额：¥{totalAmount.toFixed(2)}</p>
+          {/* 可以添加更多订单信息 */}
+        </div>
+      </Modal>
     </div>
   );
 };
