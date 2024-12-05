@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Typography, Button, Image, Tag, Divider, message, Rate } from 'antd';
+import { Card, Row, Col, Typography, Button, Image, Tag, Divider, message, Rate, Space } from 'antd';
 import { ShoppingCartOutlined } from '@ant-design/icons';
 import { motion } from 'framer-motion';
 
@@ -34,7 +34,7 @@ const ProductDetail: React.FC = () => {
       category: '鱼竿',
       rating: 4.5,
       stock: 50,
-      image: 'fishing_rod_carbon.jpg'
+      image: '/images/products/fishing_rod_carbon.jpg'
     },
     {
       id: 2,
@@ -44,7 +44,7 @@ const ProductDetail: React.FC = () => {
       category: '鱼线',
       rating: 4.3,
       stock: 100,
-      image: 'fishing_line_pro.jpg'
+      image: '/images/products/fishing_line_pro.jpg'
     },
     {
       id: 3,
@@ -99,74 +99,144 @@ const ProductDetail: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Row gutter={[24, 24]}>
-        <Col span={12}>
-          <div style={{ 
-            background: '#fafafa', 
-            padding: '16px',
-            borderRadius: '8px',
-            height: '600px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <Image
-              src={`/images/products/${product.image}`}
-              alt={product.name}
-              style={{ 
-                maxWidth: '800px',
-                maxHeight: '600px',
-                objectFit: 'contain'
-              }}
-              preview={false}
-            />
-          </div>
-        </Col>
-        
-        <Col xs={24} md={12}>
+    <div style={{ 
+      maxWidth: '1400px', 
+      margin: '0 auto', 
+      padding: '40px 16px',
+      minHeight: 'calc(100vh - 64px)'
+    }}>
+      {/* 标题和价格区域 */}
+      <div style={{ marginBottom: 40 }}>
+        <Title level={1} style={{ fontSize: '48px', marginBottom: 16 }}>
+          {product.name}
+        </Title>
+        <Text style={{ fontSize: '18px', color: '#666' }}>
+          从 ¥{product.price} 起
+        </Text>
+      </div>
+
+      {/* 主要内容区域 */}
+      <Row gutter={[32, 32]} align="stretch">
+        {/* 左侧产品图片 */}
+        <Col xs={24} md={15}>
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
           >
-            <Card style={{ minHeight: '360px' }}>
-              <Title level={2}>{product.name}</Title>
-              <Title level={3} type="danger">¥{product.price}</Title>
+            <Image
+              alt={product.name}
+              src={product.image}
+              style={{ 
+                width: '100%',
+                height: 'auto',
+                objectFit: 'cover',
+                borderRadius: '12px'
+              }}
+            />
+          </motion.div>
+        </Col>
+
+        {/* 右侧产品信息 */}
+        <Col xs={24} md={9}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
+            <Card bordered={false} style={{ background: '#f5f5f7' }}>
+              <Title level={3} style={{ marginBottom: 24 }}>型号。哪一款最适合你？</Title>
               
-              <Divider />
-              
-              <div style={{ marginBottom: '24px' }}>
-                <Text strong>商品评分：</Text>
-                <Rate disabled defaultValue={product.rating} />
+              {/* 产品选项 */}
+              <div style={{ marginBottom: 24 }}>
+                <Card
+                  hoverable
+                  style={{ 
+                    marginBottom: 16,
+                    borderRadius: '12px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => message.success('已选择标准版')}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <Text strong style={{ fontSize: '16px' }}>{product.name} 标准版</Text>
+                      <div style={{ color: '#666', marginTop: 4 }}>标准配置</div>
+                    </div>
+                    <Text strong>¥{product.price}</Text>
+                  </div>
+                </Card>
+
+                <Card
+                  hoverable
+                  style={{ 
+                    marginBottom: 16,
+                    borderRadius: '12px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => message.success('已选择高配版')}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <Text strong style={{ fontSize: '16px' }}>{product.name} 高配版</Text>
+                      <div style={{ color: '#666', marginTop: 4 }}>升级配置</div>
+                    </div>
+                    <Text strong>¥{(product.price * 1.2).toFixed(2)}</Text>
+                  </div>
+                </Card>
               </div>
-              
-              <div style={{ marginBottom: '24px' }}>
-                <Text strong>库存：</Text>
-                <Text>{product.stock} 件</Text>
+
+              {/* 库存和评分信息 */}
+              <div style={{ marginBottom: 24 }}>
+                <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                  <div>
+                    <Text strong>库存状态</Text>
+                    <div style={{ color: '#666', marginTop: 4 }}>
+                      现货 {product.stock} 件
+                    </div>
+                  </div>
+                  <div>
+                    <Text strong>商品评分</Text>
+                    <div style={{ marginTop: 4 }}>
+                      <Rate disabled defaultValue={product.rating} />
+                    </div>
+                  </div>
+                </Space>
               </div>
-              
-              <div style={{ whiteSpace: 'pre-line', marginBottom: '24px' }}>
-                <Text strong>商品描述：</Text>
-                <Paragraph>{product.description}</Paragraph>
-              </div>
-              
+
+              {/* 购买按钮 */}
               <Button 
                 type="primary" 
-                icon={<ShoppingCartOutlined />} 
                 size="large"
-                onClick={handleAddToCart}
                 block
+                style={{ 
+                  height: '50px',
+                  fontSize: '18px',
+                  borderRadius: '12px'
+                }}
+                onClick={handleAddToCart}
               >
                 加入购物车
               </Button>
+
+              {/* 商品描述 */}
+              <div style={{ marginTop: 24 }}>
+                <Paragraph style={{ 
+                  whiteSpace: 'pre-line',
+                  color: '#666',
+                  fontSize: '14px'
+                }}>
+                  {product.description}
+                </Paragraph>
+              </div>
             </Card>
           </motion.div>
         </Col>
       </Row>
 
-      <div style={{ marginTop: 24 }}>
-        <Title level={4}>相关推荐</Title>
+      {/* 相关推荐部分保持不变 */}
+      <div style={{ marginTop: 40 }}>
+        <Title level={3} style={{ marginBottom: 24 }}>相关推荐</Title>
         <Row gutter={[16, 16]}>
           {relatedProducts.map(item => (
             <Col xs={24} sm={12} md={8} lg={6} key={item.id}>
@@ -177,6 +247,7 @@ const ProductDetail: React.FC = () => {
                   <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Image
                       alt={item.name}
+                      src={item.image}
                       style={{ maxHeight: '100%', objectFit: 'cover' }}
                     />
                   </div>
