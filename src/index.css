@@ -1,5 +1,23 @@
-body {
+body, #root {
+  min-height: 100vh;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ant-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ant-layout-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
@@ -41,4 +59,151 @@ code {
   width: 400px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 产品详情页样式 */
+.ant-card {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ant-card:hover {
+  box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+}
+
+.ant-card-body {
+  padding: 20px !important;
+}
+
+.ant-btn-primary {
+  background: linear-gradient(to right, #1677ff, #4096ff);
+  border: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ant-btn-primary:hover {
+  background: linear-gradient(to right, #4096ff, #1677ff);
+  transform: translateY(-1px);
+  opacity: 0.85;
+  transform: translateY(-2px);
+}
+
+/* 新增：平滑滚动 */
+html {
+  scroll-behavior: smooth;
+}
+
+/* 新增：自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* 商品卡片样式 */
+.ant-card {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ant-card-body {
+  padding: 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.ant-btn-primary {
+  transition: all 0.3s ease;
+}
+
+.ant-btn-primary:hover {
+  opacity: 0.85;
+  transform: translateY(-2px);
+}
+
+/* 标签样式 */
+.ant-tag {
+  margin: 0;
+  transition: all 0.3s ease;
+}
+
+.ant-tag:hover {
+  transform: translateY(-1px);
+}
+
+/* 确保段落边距正确 */
+.ant-typography {
+  margin-bottom: 0 !important;
+}
+
+/* 确保所有列高度一致 */
+.ant-col {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 确保卡片内容不会意外增长 */
+.ant-typography {
+  margin-bottom: 0 !important;
+}
+
+.ant-card-cover {
+  flex: none;
+}
+
+/* 动画过渡效果 */
+.ant-btn,
+.ant-card,
+.ant-tag {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.ant-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+}
+
+.ant-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+}
+
+.ant-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+}
+
+/* 添加鼠标悬浮时的图片放大效果 */
+.product-image-container {
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.product-image-container img {
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.product-image-container:hover img {
+  transform: scale(1.05);
+}
+
+.hover-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.hover-card:hover {
+  transform: perspective(1000px) rotateX(5deg);
 } 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout, Menu, Badge } from 'antd';
 import { Routes, Route, Link } from 'react-router-dom';
 import { ShoppingCartOutlined, HomeOutlined, OrderedListOutlined } from '@ant-design/icons';
@@ -10,7 +10,28 @@ import ProductDetail from '../pages/customer/ProductDetail';
 const { Header, Content } = Layout;
 
 const CustomerLayout: React.FC = () => {
-  const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
+  const [cartCount, setCartCount] = useState(0);
+
+  // 监听购物车变化
+  useEffect(() => {
+    const updateCartCount = () => {
+      const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
+      setCartCount(cartItems.length);
+    };
+
+    // 初始化时更新一次
+    updateCartCount();
+
+    // 监听 storage 变化
+    window.addEventListener('storage', updateCartCount);
+    // 监听自定义事件
+    window.addEventListener('cartUpdated', updateCartCount);
+
+    return () => {
+      window.removeEventListener('storage', updateCartCount);
+      window.removeEventListener('cartUpdated', updateCartCount);
+    };
+  }, []);
 
   return (
     <Layout>
@@ -22,7 +43,9 @@ const CustomerLayout: React.FC = () => {
           <Menu.Item key="cart" icon={<ShoppingCartOutlined />}>
             <Link to="/customer/cart">
               购物车
-              <Badge count={cartItems.length} offset={[10, -5]} />
+              {cartCount > 0 && (
+                <Badge count={cartCount} offset={[10, -5]} />
+              )}
             </Link>
           </Menu.Item>
           <Menu.Item key="orders" icon={<OrderedListOutlined />}>

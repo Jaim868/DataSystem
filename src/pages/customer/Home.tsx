@@ -2,8 +2,9 @@ import React from 'react';
 import { Card, Row, Col, Button, Image, Tag, message, Typography, Carousel } from 'antd';
 import { ShoppingCartOutlined, FireOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
 
 interface Product {
   id: number;
@@ -29,12 +30,12 @@ const Home = () => {
   const products: Product[] = [
     {
       id: 1,
-      name: '碳素超轻鱼竿',
+      name: '碳素鱼竿',
       price: 299,
-      description: '采用高强度碳纤维材料，超轻设计，手感舒适',
+      description: '高品质碳素材料，轻便耐用，适合各种钓鱼场景',
       category: '鱼竿',
-      imageUrl: 'https://via.placeholder.com/200x200?text=碳素鱼竿',
-      features: ['超轻设计', '高强度碳纤维', '防滑手柄'],
+      imageUrl: '/images/products/fishing_rod_carbon.jpg',
+      features: ['超轻碳素材质', '伸缩便携设计', '防滑手柄'],
       stock: 50,
       sales: 120
     },
@@ -122,6 +123,10 @@ const Home = () => {
     const cart = JSON.parse(localStorage.getItem('cart') || '[]');
     cart.push({...product, quantity: 1});
     localStorage.setItem('cart', JSON.stringify(cart));
+    
+    // 触发自定义事件通知布局组件更新购物车数量
+    window.dispatchEvent(new Event('cartUpdated'));
+    
     message.success('已添加到购物车');
   };
 
@@ -143,46 +148,155 @@ const Home = () => {
       </Title>
 
       {/* 商品列表 */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[24, 24]}>
         {products.map(product => (
           <Col xs={24} sm={12} md={8} lg={6} key={product.id}>
-            <Card
-              hoverable
-              cover={<Image alt={product.name} src={product.imageUrl} />}
-              onClick={() => navigate(`/customer/product/${product.id}`)}
-              actions={[
-                <Button 
-                  type="primary" 
-                  icon={<ShoppingCartOutlined />}
-                  onClick={(e) => addToCart(e, product)}
-                >
-                  加入购物车
-                </Button>
-              ]}
+            <motion.div
+              whileHover={{ y: -5 }}
+              transition={{ duration: 0.3 }}
+              style={{ height: '100%' }}
             >
-              <Card.Meta
-                title={
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>{product.name}</span>
-                    <Tag color="red">¥{product.price}</Tag>
+              <Card
+                hoverable
+                cover={
+                  <div style={{ 
+                    height: 200,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: '#f5f5f7',
+                    overflow: 'hidden',
+                    borderRadius: '20px 20px 0 0'
+                  }}>
+                    <img
+                      alt={product.name}
+                      src={product.imageUrl}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover'
+                      }}
+                    />
                   </div>
                 }
-                description={
-                  <>
-                    <Paragraph ellipsis={{ rows: 2 }}>{product.description}</Paragraph>
-                    <div>
-                      {product.features?.map((feature, index) => (
-                        <Tag key={index} color="blue" style={{ marginBottom: 4 }}>{feature}</Tag>
-                      ))}
-                    </div>
-                    <div style={{ marginTop: 8 }}>
-                      <Tag color="orange">库存: {product.stock}</Tag>
-                      <Tag color="green">销量: {product.sales}</Tag>
-                    </div>
-                  </>
-                }
-              />
-            </Card>
+                onClick={() => navigate(`/customer/product/${product.id}`)}
+                style={{ 
+                  height: '100%',  // 使卡片填充整个容器
+                  borderRadius: 20,
+                  border: 'none',
+                  background: '#fff',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+                bodyStyle={{
+                  flex: 1,
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+              >
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '12px',
+                  height: '24px'
+                }}>
+                  <Text 
+                    strong 
+                    style={{ 
+                      fontSize: 16,
+                      maxWidth: '70%',
+                      color: '#1a1a1a'
+                    }}
+                    ellipsis
+                  >
+                    {product.name}
+                  </Text>
+                  <Text 
+                    style={{ 
+                      fontSize: 18,
+                      fontWeight: 600,
+                      color: '#ff4d4f'
+                    }}
+                  >
+                    ¥{product.price}
+                  </Text>
+                </div>
+                
+                <Paragraph 
+                  type="secondary" 
+                  ellipsis={{ rows: 2 }}
+                  style={{ 
+                    fontSize: 14,
+                    margin: '0 0 12px',
+                    height: '42px',
+                    color: '#666'
+                  }}
+                >
+                  {product.description}
+                </Paragraph>
+
+                <div style={{ 
+                  display: 'flex', 
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  height: '28px',
+                  marginBottom: '12px'
+                }}>
+                  {product.features?.slice(0, 3).map((feature, index) => (
+                    <Tag 
+                      key={index} 
+                      style={{ 
+                        margin: 0,
+                        borderRadius: 4,
+                        padding: '2px 8px',
+                        background: '#f5f5f7',
+                        border: 'none',
+                        color: '#666'
+                      }}
+                    >
+                      {feature}
+                    </Tag>
+                  ))}
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: 'auto',
+                  paddingTop: 12,
+                  borderTop: '1px solid #f0f0f0',
+                  height: '42px'
+                }}>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <Text type="secondary" style={{ fontSize: 13 }}>
+                      库存: {product.stock}
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 13 }}>
+                      销量: {product.sales}
+                    </Text>
+                  </div>
+                  <Button
+                    type="primary"
+                    icon={<ShoppingCartOutlined />}
+                    size="small"
+                    onClick={(e) => addToCart(e, product)}
+                    style={{
+                      borderRadius: 15,
+                      height: 30,
+                      padding: '0 12px',
+                      background: '#000',
+                      border: 'none'
+                    }}
+                  >
+                    加入购物车
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
           </Col>
         ))}
       </Row>

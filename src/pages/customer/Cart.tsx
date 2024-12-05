@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, InputNumber, Space, message, Card } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useNavigate } from 'react-router-dom';
 
 interface CartItem {
   id: number;
@@ -12,6 +13,7 @@ interface CartItem {
 
 const Cart = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const items = JSON.parse(localStorage.getItem('cart') || '[]');
@@ -35,7 +37,7 @@ const Cart = () => {
 
   const checkout = () => {
     const order = {
-      orderNo: `ORD${Date.now()}`,
+      orderNo: `ORDER${Date.now()}`,
       items: cartItems,
       totalAmount: cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
       status: 'pending',
@@ -48,8 +50,12 @@ const Cart = () => {
     
     // 清空购物车
     localStorage.setItem('cart', '[]');
-    setCartItems([]);
+    
+    // 触发自定义事件通知布局组件更新购物车数量
+    window.dispatchEvent(new Event('cartUpdated'));
+
     message.success('下单成功！');
+    navigate('/customer/orders');
   };
 
   const columns: ColumnsType<CartItem> = [
