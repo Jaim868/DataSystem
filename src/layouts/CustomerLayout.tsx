@@ -6,6 +6,7 @@ import Home from '../pages/customer/Home';
 import Cart from '../pages/customer/Cart';
 import Orders from '../pages/customer/Orders';
 import ProductDetail from '../pages/customer/ProductDetail';
+import axios from 'axios';
 
 const { Header, Content } = Layout;
 
@@ -15,26 +16,28 @@ const CustomerLayout: React.FC = () => {
   const [cartCount, setCartCount] = useState(0);
   const [selectedKey, setSelectedKey] = useState(location.pathname);
 
-  // 监听购物车变化
   useEffect(() => {
-    const updateCartCount = () => {
-      const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
-      setCartCount(cartItems.length);
+    const fetchCartCount = async () => {
+      try {
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+          navigate('/login');
+          return;
+        }
+
+        const response = await axios.get(`/api/cart/count?userId=${userId}`);
+        setCartCount(response.data.count);
+      } catch (error) {
+        console.error('获取购物车数量失败:', error);
+      }
     };
 
-    // 初始化时更新一次
-    updateCartCount();
-
-    // 监听 storage 变化
-    window.addEventListener('storage', updateCartCount);
-    // 监听自定义事件
-    window.addEventListener('cartUpdated', updateCartCount);
-
+    fetchCartCount();
+    window.addEventListener('cartUpdated', fetchCartCount);
     return () => {
-      window.removeEventListener('storage', updateCartCount);
-      window.removeEventListener('cartUpdated', updateCartCount);
+      window.removeEventListener('cartUpdated', fetchCartCount);
     };
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     setSelectedKey(location.pathname);
@@ -43,7 +46,11 @@ const CustomerLayout: React.FC = () => {
   const items = [
     {
       key: '/customer/home',
-      label: '首页',
+      label: (
+        <Link to="/customer/home">
+          首页
+        </Link>
+      ),
     },
     {
       key: '/customer/cart',
@@ -58,28 +65,36 @@ const CustomerLayout: React.FC = () => {
     },
     {
       key: '/customer/orders',
-      label: '我的订单',
+      label: (
+        <Link to="/customer/orders">
+          我的订单
+        </Link>
+      ),
     },
   ];
 
   const handleLogout = () => {
-    // 清除登录状态
-    localStorage.removeItem('isLoggedIn');
-    // 可选：清除其他需要清除的数据
-    localStorage.removeItem('cart');
-    // 跳转到登录页
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('userId');
     navigate('/login');
   };
 
   return (
     <Layout>
-      <Header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Header style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        position: 'fixed',  // 固定头部
+        width: '100%',
+        top: 0,
+        zIndex: 1000
+      }}>
         <Menu
           theme="dark"
           mode="horizontal"
           selectedKeys={[selectedKey]}
           items={items}
-          onClick={({ key }) => navigate(key)}
           style={{ flex: 1 }}
         />
         <Button 
@@ -91,7 +106,11 @@ const CustomerLayout: React.FC = () => {
           退出登录
         </Button>
       </Header>
-      <Content style={{ padding: '24px', minHeight: 280 }}>
+      <Content style={{ 
+        padding: '0', 
+        minHeight: '100vh',
+        marginTop: 64  // 为固定的 Header 留出空间
+      }}>
         <Routes>
           <Route path="/home" element={<Home />} />
           <Route path="/cart" element={<Cart />} />

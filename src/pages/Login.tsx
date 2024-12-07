@@ -1,30 +1,51 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, Radio, message } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Button, Radio, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
-
-interface LoginForm {
-  username: string;
-  password: string;
-}
+import axios from 'axios';
 
 const Login: React.FC = () => {
+  const [loading, setLoading] = useState(false);
+  const [userType, setUserType] = useState<'admin' | 'customer'>('customer');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const navigate = useNavigate();
-  const [userType, setUserType] = useState<'customer' | 'admin'>('customer');
 
-  const onFinish = (values: LoginForm) => {
-    if (userType === 'admin' && values.username === 'admin' && values.password === 'admin') {
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userType', 'admin');
-      navigate('/admin');
-      message.success('管理员登录成功！');
-    } else if (userType === 'customer' && values.username === 'user' && values.password === 'user') {
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userType', 'customer');
-      navigate('/customer/home');
-      message.success('用户登录成功！');
-    } else {
-      message.error('用户名或密码错误！');
+  const handleLogin = async () => {
+    if (!username || !password) {
+      message.error('请输入用户名和密码');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.post('/api/login', {
+        username,
+        password
+      });
+
+      if (response.data.success) {
+        localStorage.setItem('userId', response.data.userId);
+        localStorage.setItem('userRole', response.data.role);
+        
+        message.success('登录成功');
+        
+        if (response.data.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/customer');
+        }
+      } else {
+        message.error(response.data.message || '登录失败');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      if (axios.isAxiosError(error)) {
+        message.error(error.response?.data?.message || '登录失败');
+      } else {
+        message.error('登录失败，请稍后重试');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,6 +85,15 @@ const Login: React.FC = () => {
             </Radio.Group>
           </div>
         }
+        styles={{
+          header: {
+            background: 'transparent',
+            border: 'none'
+          },
+          body: {
+            padding: '24px 32px'
+          }
+        }}
         style={{
           width: 400,
           boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
@@ -72,18 +102,11 @@ const Login: React.FC = () => {
           backdropFilter: 'blur(8px)',
           border: '1px solid rgba(255,255,255,0.2)'
         }}
-        headStyle={{
-          background: 'transparent',
-          border: 'none'
-        }}
-        bodyStyle={{
-          padding: '24px 32px'
-        }}
         bordered={false}
       >
         <Form
           name="login"
-          onFinish={onFinish}
+          onFinish={handleLogin}
           autoComplete="off"
           size="large"
           style={{ marginTop: '20px' }}
@@ -93,8 +116,8 @@ const Login: React.FC = () => {
             rules={[{ required: true, message: '请输入用户名！' }]}
           >
             <Input 
-              prefix={<UserOutlined />} 
               placeholder={userType === 'admin' ? '请输入商家账号' : '请输入用户账号'}
+              onChange={(e) => setUsername(e.target.value)}
             />
           </Form.Item>
 
@@ -103,8 +126,8 @@ const Login: React.FC = () => {
             rules={[{ required: true, message: '请输入密码！' }]}
           >
             <Input.Password 
-              prefix={<LockOutlined />} 
               placeholder="请输入密码"
+              onChange={(e) => setPassword(e.target.value)}
             />
           </Form.Item>
 
@@ -120,6 +143,7 @@ const Login: React.FC = () => {
                 background: '#1890ff',
                 boxShadow: '0 4px 12px rgba(24,144,255,0.3)'
               }}
+              loading={loading}
             >
               登录
             </Button>

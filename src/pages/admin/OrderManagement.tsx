@@ -1,70 +1,78 @@
-import { Table, Button, Space, Modal, Tag, message, Popconfirm } from 'antd';
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Table, Button, Space, Tag, Popconfirm, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
-interface Order {
+interface OrderItem {
   id: number;
-  orderNo: string;
-  customerName: string;
-  products: Array<{
-    name: string;
-    quantity: number;
-    price: number;
-  }>;
-  totalAmount: number;
-  status: 'pending' | 'processing' | 'completed' | 'cancelled';
-  createTime: string;
+  name: string;
+  price: number;
+  quantity: number;
 }
 
-const OrderManagement = () => {
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: 1,
-      orderNo: 'ORD20230001',
-      customerName: '李四',
-      products: [
-        { name: '碳素鱼竿', quantity: 1, price: 299 },
-        { name: '渔线', quantity: 2, price: 15 }
-      ],
-      totalAmount: 329,
-      status: 'pending',
-      createTime: '2023-05-20 14:30:00'
-    }
-  ]);
+interface Order {
+  order_no: string;
+  customer_name: string;
+  total_amount: number;
+  status: 'pending' | 'processing' | 'completed' | 'cancelled';
+  create_time: string;
+  items: OrderItem[];
+}
 
-  const handleStatusChange = (orderId: number, newStatus: Order['status']) => {
-    setOrders(orders.map(order => 
-      order.id === orderId ? { ...order, status: newStatus } : order
-    ));
-    message.success('订单状态已更新');
+const OrderManagement: React.FC = () => {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      const response = await fetch('/api/orders');
+      if (!response.ok) throw new Error('获取订单列表失败');
+      const data = await response.json();
+      setOrders(data);
+    } catch (error) {
+      message.error('获取订单列表失败');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (orderNo: string, status: Order['status']) => {
+    try {
+      const response = await fetch('/api/orders/status', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderNo, status })
+      });
+
+      if (!response.ok) throw new Error('更新订单状态失败');
+
+      setOrders(orders.map(order =>
+        order.order_no === orderNo ? { ...order, status } : order
+      ));
+      message.success('订单状态更新成功');
+    } catch (error) {
+      message.error('更新订单状态失败');
+      console.error(error);
+    }
   };
 
   const columns: ColumnsType<Order> = [
     {
       title: '订单编号',
-      dataIndex: 'orderNo',
+      dataIndex: 'order_no',
     },
     {
       title: '客户名称',
-      dataIndex: 'customerName',
+      dataIndex: 'customer_name',
     },
     {
-      title: '商品信息',
-      dataIndex: 'products',
-      render: (products: Order['products']) => (
-        <ul style={{ margin: 0, paddingLeft: 20 }}>
-          {products.map((p: { name: string; quantity: number; price: number }, index: number) => (
-            <li key={index}>
-              {p.name} x {p.quantity} (¥{p.price})
-            </li>
-          ))}
-        </ul>
-      ),
-    },
-    {
-      title: '总金额',
-      dataIndex: 'totalAmount',
-      render: (amount) => `¥${amount.toFixed(2)}`,
+      title: '订单金额',
+      dataIndex: 'total_amount',
+      render: (amount: number) => `¥${amount.toFixed(2)}`,
     },
     {
       title: '订单状态',
@@ -81,7 +89,8 @@ const OrderManagement = () => {
     },
     {
       title: '下单时间',
-      dataIndex: 'createTime',
+      dataIndex: 'create_time',
+      render: (time: string) => new Date(time).toLocaleString(),
     },
     {
       title: '操作',
@@ -91,7 +100,7 @@ const OrderManagement = () => {
           {record.status === 'pending' && (
             <Button 
               type="link" 
-              onClick={() => handleStatusChange(record.id, 'processing')}
+              onClick={() => handleStatusChange(record.order_no, 'processing')}
             >
               开始处理
             </Button>
@@ -99,7 +108,7 @@ const OrderManagement = () => {
           {record.status === 'processing' && (
             <Button 
               type="link" 
-              onClick={() => handleStatusChange(record.id, 'completed')}
+              onClick={() => handleStatusChange(record.order_no, 'completed')}
             >
               完成订单
             </Button>
@@ -107,42 +116,49 @@ const OrderManagement = () => {
           {(record.status === 'pending' || record.status === 'processing') && (
             <Popconfirm
               title="确定要取消订单吗？"
-              onConfirm={() => handleStatusChange(record.id, 'cancelled')}
+              onConfirm={() => handleStatusChange(record.order_no, 'cancelled')}
             >
               <Button type="link" danger>取消订单</Button>
             </Popconfirm>
           )}
         </Space>
       ),
-    },
+    }
   ];
 
-  return (
-    <div>
-      <Table 
-        columns={columns} 
-        dataSource={orders} 
+  const expandedRowRender = (record: Order) => {
+    const columns: ColumnsType<OrderItem> = [
+      { title: '商品名称', dataIndex: 'name' },
+      { 
+        title: '单价', 
+        dataIndex: 'price',
+        render: (price: number) => `¥${price.toFixed(2)}`,
+      },
+      { title: '数量', dataIndex: 'quantity' },
+      { 
+        title: '小计',
+        render: (_, record) => `¥${(record.price * record.quantity).toFixed(2)}`,
+      },
+    ];
+
+    return (
+      <Table
+        columns={columns}
+        dataSource={record.items}
+        pagination={false}
         rowKey="id"
-        expandable={{
-          expandedRowRender: (record) => (
-            <div style={{ padding: '20px' }}>
-              <h4>订单详情</h4>
-              <p>客户：{record.customerName}</p>
-              <p>下单时间：{record.createTime}</p>
-              <h4>商品清单</h4>
-              <ul>
-                {record.products.map((p, index) => (
-                  <li key={index}>
-                    {p.name} - 数量：{p.quantity} - 单价：¥{p.price}
-                  </li>
-                ))}
-              </ul>
-              <p>总金额：¥{record.totalAmount.toFixed(2)}</p>
-            </div>
-          ),
-        }}
       />
-    </div>
+    );
+  };
+
+  return (
+    <Table
+      columns={columns}
+      dataSource={orders}
+      expandable={{ expandedRowRender }}
+      rowKey="order_no"
+      loading={loading}
+    />
   );
 };
 

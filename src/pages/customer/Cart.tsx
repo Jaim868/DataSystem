@@ -1,67 +1,109 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, InputNumber, Space, message, Card, Modal } from 'antd';
+import { Table, Button, InputNumber, Card, Space, Modal, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 interface CartItem {
   id: number;
+  product_id: number;
   name: string;
   price: number;
   quantity: number;
-  imageUrl: string;
+  image_url: string;
 }
 
-const Cart = () => {
+const Cart: React.FC = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const items = JSON.parse(localStorage.getItem('cart') || '[]');
-    setCartItems(items);
+    fetchCartItems();
   }, []);
 
-  const updateQuantity = (id: number, quantity: number) => {
-    const newItems = cartItems.map(item =>
-      item.id === id ? { ...item, quantity } : item
-    );
-    setCartItems(newItems);
-    localStorage.setItem('cart', JSON.stringify(newItems));
+  const fetchCartItems = async () => {
+    try {
+      const userId = localStorage.getItem('userId');
+      if (!userId) {
+        navigate('/login');
+        return;
+      }
+
+      const response = await axios.get(`/api/cart?userId=${userId}`);
+      setCartItems(response.data);
+    } catch (error) {
+      message.error('获取购物车数据失败');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const removeItem = (id: number) => {
-    const newItems = cartItems.filter(item => item.id !== id);
-    setCartItems(newItems);
-    localStorage.setItem('cart', JSON.stringify(newItems));
-    message.success('已从购物车移除');
+  const updateQuantity = async (itemId: number, quantity: number) => {
+    try {
+      const userId = localStorage.getItem('userId');
+      const response = await axios.put('/api/cart', {
+        userId,
+        itemId,
+        quantity
+      });
+      
+      setCartItems(items =>
+        items.map(item =>
+          item.id === itemId ? { ...item, quantity } : item
+        )
+      );
+      window.dispatchEvent(new Event('cartUpdated'));
+    } catch (error) {
+      message.error('更新数量失败');
+      console.error(error);
+    }
   };
 
-  const handleCheckout = () => {
-    setIsModalOpen(true);
+  const removeItem = async (itemId: number) => {
+    try {
+      const userId = localStorage.getItem('userId');
+      const response = await axios.delete(`/api/cart/${itemId}?userId=${userId}`);
+      
+      setCartItems(items => items.filter(item => item.id !== itemId));
+      message.success('商品已删除');
+    } catch (error) {
+      message.error('删除商品失败');
+      console.error(error);
+    }
   };
 
-  const handleConfirmOrder = () => {
-    const order = {
-      orderNo: `ORDER${Date.now()}`,
-      items: cartItems,
-      totalAmount: cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-      status: 'pending',
-      createTime: new Date().toISOString()
-    };
-    
-    const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-    orders.push(order);
-    localStorage.setItem('orders', JSON.stringify(orders));
-    
-    // 清空购物车
-    localStorage.setItem('cart', '[]');
-    
-    // 触发自定义事件通知布局组件更新购物车数量
-    window.dispatchEvent(new Event('cartUpdated'));
+  const handleCheckout = async () => {
+    try {
+      const userId = localStorage.getItem('userId');
+      if (!userId) {
+        message.error('请先登录');
+        navigate('/login');
+        return;
+      }
 
-    message.success('下单成功！');
-    navigate('/customer/orders');
-    setIsModalOpen(false);
+      const response = await axios.post(`/api/orders?userId=${userId}`, {
+        items: cartItems.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        totalAmount
+      });
+
+      if (response.data.success) {
+        message.success('订单创建成功');
+        setCartItems([]);
+        navigate('/customer/orders');
+      } else {
+        throw new Error('创建订单失败');
+      }
+    } catch (error) {
+      message.error('创建订单失败');
+      console.error('Checkout error:', error);
+    }
   };
 
   const columns: ColumnsType<CartItem> = [
@@ -72,7 +114,7 @@ const Cart = () => {
     {
       title: '单价',
       dataIndex: 'price',
-      render: (price: number) => `¥${price.toFixed(2)}`,
+      render: (price: string | number) => `¥${Number(price).toFixed(2)}`,
     },
     {
       title: '数量',
@@ -87,7 +129,7 @@ const Cart = () => {
     },
     {
       title: '小计',
-      render: (_, record) => `¥${(record.price * record.quantity).toFixed(2)}`,
+      render: (_, record) => `¥${(Number(record.price) * record.quantity).toFixed(2)}`,
     },
     {
       title: '操作',
@@ -99,7 +141,7 @@ const Cart = () => {
     },
   ];
 
-  const totalAmount = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const totalAmount = cartItems.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
 
   return (
     <div>
@@ -119,7 +161,7 @@ const Cart = () => {
       <Modal
         title="确认订单"
         open={isModalOpen}
-        onOk={handleConfirmOrder}
+        onOk={handleCheckout}
         onCancel={() => setIsModalOpen(false)}
         okText="确认下单"
         cancelText="返回购物车"

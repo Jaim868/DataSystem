@@ -1,108 +1,120 @@
-import { Table, Button, Space, Modal, Form, Input, message, Popconfirm, InputNumber } from 'antd';
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Table, Button, Modal, Form, Input, InputNumber, Space, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
-interface Inventory {
+interface InventoryItem {
   id: number;
-  productName: string;
-  quantity: number;
+  name: string;
+  stock: number;
   price: number;
   category: string;
-  supplier: string;
+  sales: number;
+  created_at: string;
+  updated_at: string;
 }
 
-const InventoryManagement = () => {
-  const [inventory, setInventory] = useState<Inventory[]>([
-    {
-      id: 1,
-      productName: '碳素鱼竿',
-      quantity: 100,
-      price: 299,
-      category: '鱼竿',
-      supplier: '渔具供应商A'
-    }
-  ]);
+const InventoryManagement: React.FC = () => {
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingItem, setEditingItem] = useState<Inventory | null>(null);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [form] = Form.useForm();
 
-  const handleAdd = (values: Omit<Inventory, 'id'>) => {
-    const newItem = {
-      ...values,
-      id: inventory.length + 1,
-    };
-    setInventory([...inventory, newItem]);
-    message.success('添加成功');
-    setIsModalVisible(false);
-    form.resetFields();
+  useEffect(() => {
+    fetchInventory();
+  }, []);
+
+  const fetchInventory = async () => {
+    try {
+      const response = await fetch('/api/inventory');
+      if (!response.ok) throw new Error('获取库存失败');
+      const data = await response.json();
+      setInventory(data);
+    } catch (error) {
+      message.error('获取库存数据失败');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEdit = (values: Inventory) => {
-    const newInventory = inventory.map(item => 
-      item.id === editingItem?.id ? { ...values, id: item.id } : item
-    );
-    setInventory(newInventory);
-    message.success('修改成功');
-    setIsModalVisible(false);
-    setEditingItem(null);
-    form.resetFields();
+  const handleUpdateStock = async (id: number, stock: number) => {
+    try {
+      const response = await fetch('/api/inventory/stock', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: id, stock })
+      });
+
+      if (!response.ok) throw new Error('更新库存失败');
+
+      setInventory(items =>
+        items.map(item =>
+          item.id === id ? { ...item, stock } : item
+        )
+      );
+      message.success('库存更新成功');
+    } catch (error) {
+      message.error('更新库存失败');
+      console.error(error);
+    }
   };
 
-  const handleDelete = (id: number) => {
-    setInventory(inventory.filter(item => item.id !== id));
-    message.success('删除成功');
+  const handleAddProduct = async (values: any) => {
+    try {
+      const response = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values)
+      });
+
+      if (!response.ok) throw new Error('添加商品失败');
+      
+      const data = await response.json();
+      setInventory([...inventory, { ...values, id: data.id }]);
+      message.success('添加商品成功');
+      setIsModalVisible(false);
+      form.resetFields();
+    } catch (error) {
+      message.error('添加商品失败');
+      console.error(error);
+    }
   };
 
-  const columns: ColumnsType<Inventory> = [
-    {
-      title: '商品ID',
-      dataIndex: 'id',
-    },
+  const columns: ColumnsType<InventoryItem> = [
     {
       title: '商品名称',
-      dataIndex: 'productName',
+      dataIndex: 'name',
     },
     {
-      title: '库存数量',
-      dataIndex: 'quantity',
+      title: '类别',
+      dataIndex: 'category',
     },
     {
-      title: '单价',
+      title: '库存',
+      dataIndex: 'stock',
+      render: (stock: number, record) => (
+        <InputNumber
+          min={0}
+          value={stock}
+          onChange={(value) => handleUpdateStock(record.id, value || 0)}
+        />
+      ),
+    },
+    {
+      title: '价格',
       dataIndex: 'price',
       render: (price: number) => `¥${price.toFixed(2)}`,
     },
     {
-      title: '分类',
-      dataIndex: 'category',
+      title: '销量',
+      dataIndex: 'sales',
     },
     {
-      title: '供应商',
-      dataIndex: 'supplier',
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_, record) => (
-        <Space>
-          <Button 
-            type="link" 
-            onClick={() => {
-              setEditingItem(record);
-              form.setFieldsValue(record);
-              setIsModalVisible(true);
-            }}
-          >
-            编辑
-          </Button>
-          <Popconfirm
-            title="确定要删除吗？"
-            onConfirm={() => handleDelete(record.id)}
-          >
-            <Button type="link" danger>删除</Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      render: (time: string) => new Date(time).toLocaleString(),
+    }
   ];
 
   return (
@@ -120,66 +132,67 @@ const InventoryManagement = () => {
         </Button>
       </div>
       
-      <Table columns={columns} dataSource={inventory} rowKey="id" />
+      <Table 
+        columns={columns} 
+        dataSource={inventory} 
+        rowKey="id"
+        loading={loading}
+      />
       
       <Modal
-        title={editingItem ? "编辑商品" : "添加商品"}
+        title="添加商品"
         open={isModalVisible}
         onCancel={() => {
           setIsModalVisible(false);
-          setEditingItem(null);
           form.resetFields();
         }}
         footer={null}
       >
         <Form
           form={form}
-          onFinish={editingItem ? handleEdit : handleAdd}
+          onFinish={handleAddProduct}
           layout="vertical"
         >
           <Form.Item
-            name="productName"
+            name="name"
             label="商品名称"
             rules={[{ required: true, message: '请输入商品名称' }]}
           >
             <Input />
           </Form.Item>
           <Form.Item
-            name="quantity"
-            label="库存数量"
-            rules={[{ required: true, message: '请输入库存数量' }]}
+            name="category"
+            label="类别"
+            rules={[{ required: true, message: '请输入商品类别' }]}
           >
-            <InputNumber min={0} style={{ width: '100%' }} />
+            <Input />
           </Form.Item>
           <Form.Item
             name="price"
-            label="单价"
-            rules={[{ required: true, message: '请输入单价' }]}
+            label="价格"
+            rules={[{ required: true, message: '请输入价格' }]}
           >
-            <InputNumber min={0} precision={2} prefix="¥" style={{ width: '100%' }} />
+            <InputNumber
+              min={0}
+              precision={2}
+              style={{ width: '100%' }}
+              prefix="¥"
+            />
           </Form.Item>
           <Form.Item
-            name="category"
-            label="分类"
-            rules={[{ required: true, message: '请输入分类' }]}
+            name="stock"
+            label="初始库存"
+            rules={[{ required: true, message: '请输入初始库存' }]}
           >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="supplier"
-            label="供应商"
-            rules={[{ required: true, message: '请输入供应商' }]}
-          >
-            <Input />
+            <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit">
-                {editingItem ? '保存' : '添加'}
+                添加
               </Button>
               <Button onClick={() => {
                 setIsModalVisible(false);
-                setEditingItem(null);
                 form.resetFields();
               }}>
                 取消

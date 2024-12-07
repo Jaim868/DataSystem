@@ -1,121 +1,164 @@
-import React from 'react';
-import { Card, Row, Col, Statistic } from 'antd';
-import { ShoppingCartOutlined, UserOutlined, DollarOutlined, InboxOutlined } from '@ant-design/icons';
-import { Line, Column, Pie } from '@ant-design/plots';
+import React, { useState, useEffect } from 'react';
+import { Card, Row, Col, Statistic, Spin } from 'antd';
+import { ShoppingCartOutlined, DollarOutlined, WarningOutlined } from '@ant-design/icons';
+import ReactECharts from 'echarts-for-react';
 
-const Dashboard = () => {
-  // 销售趋势数据
-  const salesData = [
-    { month: '1月', sales: 3500 },
-    { month: '2月', sales: 4200 },
-    { month: '3月', sales: 3800 },
-    { month: '4月', sales: 5000 },
-    { month: '5月', sales: 4800 },
-    { month: '6月', sales: 6000 },
-  ];
+interface DashboardData {
+  monthlySales: {
+    month: string;
+    total_sales: number;
+    order_count: number;
+  }[];
+  categorySales: {
+    category: string;
+    sales_count: number;
+    category_sales: number;
+  }[];
+  topProducts: {
+    name: string;
+    total_quantity: number;
+    total_sales: number;
+  }[];
+}
 
-  const lineOption = {
-    xAxis: {
-      type: 'category',
-      data: salesData.map(item => item.month)
-    },
-    yAxis: {
-      type: 'value'
-    },
-    series: [{
-      data: salesData.map(item => item.sales),
-      type: 'line'
-    }]
+interface Overview {
+  todayOrders: number;
+  todaySales: number;
+  lowStockCount: number;
+}
+
+const Dashboard: React.FC = () => {
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [overview, setOverview] = useState<Overview | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetchDashboardStats(),
+      fetchOverview()
+    ]).finally(() => setLoading(false));
+  }, []);
+
+  const fetchDashboardStats = async () => {
+    try {
+      const response = await fetch('/api/dashboard/stats');
+      if (!response.ok) throw new Error('获���统计数据失败');
+      const data = await response.json();
+      setDashboardData(data);
+    } catch (error) {
+      console.error('获取统计数据失败:', error);
+    }
   };
 
-  const pieOption = {
-    tooltip: {
-      trigger: 'item'
+  const fetchOverview = async () => {
+    try {
+      const response = await fetch('/api/dashboard/overview');
+      if (!response.ok) throw new Error('获取概览数据失败');
+      const data = await response.json();
+      setOverview(data);
+    } catch (error) {
+      console.error('获取概览数据失败:', error);
+    }
+  };
+
+  const salesTrendOption = dashboardData ? {
+    title: { text: '月度销售趋势' },
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: dashboardData.monthlySales.map(item => item.month)
     },
+    yAxis: { type: 'value' },
+    series: [{
+      data: dashboardData.monthlySales.map(item => item.total_sales),
+      type: 'line',
+      smooth: true
+    }]
+  } : {};
+
+  const categorySalesOption = dashboardData ? {
+    title: { text: '商品类别销售占比' },
+    tooltip: { trigger: 'item' },
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],
-      data: [
-        { value: 40, name: '鱼竿' },
-        { value: 25, name: '鱼线' },
-        { value: 20, name: '鱼钩' },
-        { value: 15, name: '其他配件' }
-      ]
+      data: dashboardData.categorySales.map(item => ({
+        value: item.category_sales,
+        name: item.category
+      }))
     }]
-  };
+  } : {};
 
-  const barOption = {
+  const topProductsOption = dashboardData ? {
+    title: { text: '热销商品TOP5' },
+    tooltip: { trigger: 'axis' },
     xAxis: {
       type: 'category',
-      data: ['碳素鱼竿', '进口渔线', '专业鱼钩', '渔具包', '浮漂']
+      data: dashboardData.topProducts.map(item => item.name)
     },
-    yAxis: {
-      type: 'value'
-    },
+    yAxis: { type: 'value' },
     series: [{
-      data: [120, 86, 72, 65, 53],
+      data: dashboardData.topProducts.map(item => item.total_quantity),
       type: 'bar'
     }]
-  };
+  } : {};
+
+  if (loading) {
+    return <Spin size="large" />;
+  }
 
   return (
     <div>
-      <Row gutter={[16, 16]}>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="今日销售额"
-              value={2893}
-              prefix={<DollarOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
+      <Row gutter={16}>
+        <Col span={8}>
           <Card>
             <Statistic
               title="今日订单数"
-              value={28}
+              value={overview?.todayOrders || 0}
               prefix={<ShoppingCartOutlined />}
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col span={8}>
           <Card>
             <Statistic
-              title="新增客户"
-              value={12}
-              prefix={<UserOutlined />}
+              title="今日销售额"
+              value={overview?.todaySales || 0}
+              precision={2}
+              prefix={<DollarOutlined />}
+              suffix="元"
             />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="库存预警"
-              value={5}
-              prefix={<InboxOutlined />}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
-        <Col span={16}>
-          <Card title="销售趋势">
-            <Line option={lineOption} style={{ height: 300 }} />
           </Card>
         </Col>
         <Col span={8}>
-          <Card title="商品类别销售占比">
-            <Pie option={pieOption} style={{ height: 300 }} />
+          <Card>
+            <Statistic
+              title="库存预警商品数"
+              value={overview?.lowStockCount || 0}
+              prefix={<WarningOutlined />}
+              valueStyle={{ color: '#cf1322' }}
+            />
           </Card>
         </Col>
       </Row>
 
-      <Row style={{ marginTop: '16px' }}>
+      <Row gutter={16} style={{ marginTop: 16 }}>
         <Col span={24}>
-          <Card title="热销商品排行">
-            <Column option={barOption} style={{ height: 300 }} />
+          <Card>
+            <ReactECharts option={salesTrendOption} style={{ height: 400 }} />
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={16} style={{ marginTop: 16 }}>
+        <Col span={12}>
+          <Card>
+            <ReactECharts option={categorySalesOption} style={{ height: 400 }} />
+          </Card>
+        </Col>
+        <Col span={12}>
+          <Card>
+            <ReactECharts option={topProductsOption} style={{ height: 400 }} />
           </Card>
         </Col>
       </Row>

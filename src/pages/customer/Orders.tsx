@@ -1,97 +1,135 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Tag } from 'antd';
+import { Table, Tag, Card, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 interface OrderItem {
+  id: number;
   name: string;
   price: number;
   quantity: number;
+  product_id: number;
 }
 
 interface Order {
-  orderNo: string;
-  items: OrderItem[];
-  totalAmount: number;
+  order_no: string;
+  total_amount: number;
   status: 'pending' | 'processing' | 'completed' | 'cancelled';
-  createTime: string;
+  created_at: string;
+  items: OrderItem[];
 }
 
-const Orders = () => {
+interface ApiOrder extends Omit<Order, 'items'> {
+  items: OrderItem[] | string;  // API 返回的 items 可能是字符串
+}
+
+const Orders: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-    setOrders(savedOrders);
+    fetchOrders();
   }, []);
+
+  const fetchOrders = async () => {
+    try {
+      const userId = localStorage.getItem('userId');
+      if (!userId) {
+        message.error('请先登录');
+        navigate('/login');
+        return;
+      }
+
+      const response = await axios.get<ApiOrder[]>(`/api/orders?userId=${userId}`);
+      console.log('Orders response:', response.data);
+      
+      if (Array.isArray(response.data)) {
+        const validOrders = response.data.map(order => ({
+          ...order,
+          items: Array.isArray(order.items) 
+            ? order.items.filter((item: OrderItem | null): item is OrderItem => 
+                item !== null && typeof item === 'object' && 'name' in item
+              )
+            : []
+        }));
+        setOrders(validOrders);
+      } else {
+        console.error('Invalid orders data:', response.data);
+        message.error('获取订单数据格式错误');
+      }
+    } catch (error) {
+      console.error('Get orders error:', error);
+      if (axios.isAxiosError(error)) {
+        message.error(error.response?.data?.message || '获取订单列表失败');
+      } else {
+        message.error('获取订单列表失败');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const columns: ColumnsType<Order> = [
     {
       title: '订单编号',
-      dataIndex: 'orderNo',
+      dataIndex: 'order_no',
+      key: 'order_no',
     },
     {
       title: '商品信息',
       dataIndex: 'items',
+      key: 'items',
       render: (items: OrderItem[]) => (
-        <ul style={{ margin: 0, paddingLeft: 20 }}>
-          {items.map((item, index) => (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {items?.map((item, index) => item && (
             <li key={index}>
-              {item.name} x {item.quantity} (¥{item.price})
+              {item.name} x {item.quantity} (¥{Number(item.price).toFixed(2)})
             </li>
           ))}
         </ul>
       ),
     },
     {
-      title: '总金额',
-      dataIndex: 'totalAmount',
-      render: (amount: number) => `¥${amount.toFixed(2)}`,
+      title: '订单金额',
+      dataIndex: 'total_amount',
+      key: 'total_amount',
+      render: (amount: number) => `¥${Number(amount).toFixed(2)}`,
     },
     {
       title: '订单状态',
       dataIndex: 'status',
-      render: (status: Order['status']) => {
+      key: 'status',
+      render: (status: string) => {
         const statusMap = {
-          pending: { color: 'gold', text: '待处理' },
-          processing: { color: 'blue', text: '处理中' },
-          completed: { color: 'green', text: '已完成' },
-          cancelled: { color: 'red', text: '已取消' }
+          pending: { text: '待处理', color: 'blue' },
+          processing: { text: '处理中', color: 'orange' },
+          completed: { text: '已完成', color: 'green' },
+          cancelled: { text: '已取消', color: 'red' },
         };
-        return <Tag color={statusMap[status].color}>{statusMap[status].text}</Tag>;
+        const { text, color } = statusMap[status as keyof typeof statusMap] || { text: '未知', color: 'default' };
+        return <Tag color={color}>{text}</Tag>;
       },
     },
     {
-      title: '下单时间',
-      dataIndex: 'createTime',
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
       render: (time: string) => new Date(time).toLocaleString(),
     },
   ];
 
   return (
-    <div>
-      <Table 
-        columns={columns} 
-        dataSource={orders} 
-        rowKey="orderNo"
-        expandable={{
-          expandedRowRender: (record) => (
-            <div style={{ padding: '20px' }}>
-              <h4>订单详情</h4>
-              <p>下单时间：{new Date(record.createTime).toLocaleString()}</p>
-              <h4>商品清单</h4>
-              <ul>
-                {record.items.map((item, index) => (
-                  <li key={index}>
-                    {item.name} - 数量：{item.quantity} - 单价：¥{item.price}
-                  </li>
-                ))}
-              </ul>
-              <p>总金额：¥{record.totalAmount.toFixed(2)}</p>
-            </div>
-          ),
-        }}
+    <Card title="我的订单" style={{ margin: '24px' }}>
+      <Table
+        columns={columns}
+        dataSource={orders}
+        rowKey="order_no"
+        loading={loading}
+        pagination={{ pageSize: 10 }}
       />
-    </div>
+    </Card>
   );
 };
 

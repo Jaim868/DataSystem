@@ -1,25 +1,24 @@
-import React, { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import React from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 
 interface PrivateRouteProps {
-  children: ReactNode;
-  role: 'admin' | 'customer';
+  children: React.ReactNode;
+  role?: 'admin' | 'customer';
 }
 
 const PrivateRoute = ({ children, role }: PrivateRouteProps) => {
-  // 这里应该检查用户是否已登录以及角色是否匹配
-  const isAuthenticated = localStorage.getItem('token');
   const userRole = localStorage.getItem('userRole');
+  const location = useLocation();
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  if (!userRole) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (userRole !== role) {
-    return <Navigate to="/login" replace />;
+  if (role && userRole !== role) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;
 };
 
-export default PrivateRoute; 
+export default PrivateRoute;

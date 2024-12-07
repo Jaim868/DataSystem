@@ -1,56 +1,101 @@
-import { Table, Button, Space, Modal, Form, Input, message, Popconfirm } from 'antd';
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Table, Button, Modal, Form, Input, Space, Popconfirm, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 interface Employee {
   id: number;
   name: string;
   position: string;
-  phone: string;
   email: string;
-  joinDate: string;
+  phone: string;
+  hireDate: string;
 }
 
-const EmployeeManagement = () => {
-  const [employees, setEmployees] = useState<Employee[]>([
-    {
-      id: 1,
-      name: '张三',
-      position: '销售经理',
-      phone: '13800138000',
-      email: 'zhangsan@example.com',
-      joinDate: '2023-01-01'
-    }
-  ]);
+const EmployeeManagement: React.FC = () => {
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [form] = Form.useForm();
 
-  const handleAdd = (values: Omit<Employee, 'id'>) => {
-    const newEmployee = {
-      ...values,
-      id: employees.length + 1,
-    };
-    setEmployees([...employees, newEmployee]);
-    message.success('添加成功');
-    setIsModalVisible(false);
-    form.resetFields();
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      const response = await fetch('/api/employees');
+      if (!response.ok) throw new Error('获取员工列表失败');
+      const data = await response.json();
+      setEmployees(data);
+    } catch (error) {
+      message.error('获取员工列表失败');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEdit = (values: Employee) => {
-    const newEmployees = employees.map(emp => 
-      emp.id === editingEmployee?.id ? { ...values, id: emp.id } : emp
-    );
-    setEmployees(newEmployees);
-    message.success('修改成功');
-    setIsModalVisible(false);
-    setEditingEmployee(null);
-    form.resetFields();
+  const handleAdd = async (values: any) => {
+    try {
+      const response = await fetch('/api/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values)
+      });
+
+      if (!response.ok) throw new Error('添加员工失败');
+      
+      const data = await response.json();
+      setEmployees([...employees, { ...values, id: data.id }]);
+      message.success('添加成功');
+      setIsModalVisible(false);
+      form.resetFields();
+    } catch (error) {
+      message.error('添加员工失败');
+      console.error(error);
+    }
   };
 
-  const handleDelete = (id: number) => {
-    setEmployees(employees.filter(emp => emp.id !== id));
-    message.success('删除成功');
+  const handleEdit = async (values: any) => {
+    if (!editingEmployee) return;
+    
+    try {
+      const response = await fetch(`/api/employees/${editingEmployee.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values)
+      });
+
+      if (!response.ok) throw new Error('更新员工失败');
+
+      setEmployees(employees.map(emp => 
+        emp.id === editingEmployee.id ? { ...emp, ...values } : emp
+      ));
+      message.success('更新成功');
+      setIsModalVisible(false);
+      setEditingEmployee(null);
+      form.resetFields();
+    } catch (error) {
+      message.error('更新员工失败');
+      console.error(error);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      const response = await fetch(`/api/employees/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) throw new Error('删除员工失败');
+
+      setEmployees(employees.filter(emp => emp.id !== id));
+      message.success('删除成功');
+    } catch (error) {
+      message.error('删除员工失败');
+      console.error(error);
+    }
   };
 
   const columns: ColumnsType<Employee> = [
@@ -76,7 +121,7 @@ const EmployeeManagement = () => {
     },
     {
       title: '入职日期',
-      dataIndex: 'joinDate',
+      dataIndex: 'hireDate',
     },
     {
       title: '操作',
@@ -169,7 +214,7 @@ const EmployeeManagement = () => {
             <Input />
           </Form.Item>
           <Form.Item
-            name="joinDate"
+            name="hireDate"
             label="入职日期"
             rules={[{ required: true, message: '请输入入职日期' }]}
           >
