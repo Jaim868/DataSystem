@@ -46,48 +46,66 @@ class CartController {
     public function addToCart() {
         try {
             $data = json_decode(file_get_contents('php://input'), true);
-            $userId = $data['userId'] ?? null;
-            $productId = $data['productId'] ?? null;
-            $quantity = $data['quantity'] ?? 1;
-
-            if (!$userId || !$productId) {
+            
+            if (!isset($data['product_id']) || !isset($data['quantity'])) {
                 http_response_code(400);
                 echo json_encode(['error' => '缺少必要参数']);
                 return;
             }
 
-            // 检查商品是否已在购物车中
+            // 这里暂时使用固定用户ID，后续需要从登录状态获取
+            $userId = 2; // 假设这是默认用户ID
+            
+            // 检查商品是否存在且有库存
             $stmt = $this->db->prepare("
-                SELECT id, quantity 
-                FROM cart_items 
+                SELECT stock FROM products 
+                WHERE id = ? AND deleted_at IS NULL
+            ");
+            $stmt->execute([$data['product_id']]);
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$product) {
+                http_response_code(404);
+                echo json_encode(['error' => '商品不存在']);
+                return;
+            }
+            
+            if ($product['stock'] < $data['quantity']) {
+                http_response_code(400);
+                echo json_encode(['error' => '库存不足']);
+                return;
+            }
+
+            // 检查购物车是否已有该商品
+            $stmt = $this->db->prepare("
+                SELECT id, quantity FROM cart_items 
                 WHERE user_id = ? AND product_id = ?
             ");
-            $stmt->execute([$userId, $productId]);
-            $existingItem = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt->execute([$userId, $data['product_id']]);
+            $cartItem = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if ($existingItem) {
+            if ($cartItem) {
                 // 更新数量
                 $stmt = $this->db->prepare("
                     UPDATE cart_items 
                     SET quantity = quantity + ?
                     WHERE id = ?
                 ");
-                $stmt->execute([$quantity, $existingItem['id']]);
+                $stmt->execute([$data['quantity'], $cartItem['id']]);
             } else {
-                // 新增商品到购物车
+                // 新增购物车项
                 $stmt = $this->db->prepare("
                     INSERT INTO cart_items (user_id, product_id, quantity)
                     VALUES (?, ?, ?)
                 ");
-                $stmt->execute([$userId, $productId, $quantity]);
+                $stmt->execute([$userId, $data['product_id'], $data['quantity']]);
             }
 
-            header('Content-Type: application/json');
-            echo json_encode(['success' => true]);
+            echo json_encode(['message' => '添加成功']);
         } catch(PDOException $e) {
             error_log('Add to cart error: ' . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['error' => $e->getMessage()]);
+            echo json_encode(['error' => '添加到购物车失败']);
         }
     }
 

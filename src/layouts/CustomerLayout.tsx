@@ -57,9 +57,6 @@ const CustomerLayout: React.FC = () => {
       label: (
         <Link to="/customer/cart">
           购物车
-          {cartCount > 0 && (
-            <Badge count={cartCount} offset={[10, -5]} />
-          )}
         </Link>
       ),
     },

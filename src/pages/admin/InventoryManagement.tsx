@@ -1,38 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Space, message } from 'antd';
+import { Table, InputNumber, message, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import axios from 'axios';
 
-interface InventoryItem {
+interface Product {
   id: number;
   name: string;
+  category: string;
   stock: number;
   price: number;
-  category: string;
   sales: number;
-  created_at: string;
   updated_at: string;
 }
 
 const InventoryManagement: React.FC = () => {
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  const [form] = Form.useForm();
-
-  useEffect(() => {
-    fetchInventory();
-  }, []);
+  const [inventory, setInventory] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const fetchInventory = async () => {
+    setLoading(true);
     try {
-      const response = await fetch('/api/inventory');
-      if (!response.ok) throw new Error('获取库存失败');
-      const data = await response.json();
-      setInventory(data);
+      const response = await axios.get('/api/admin/products');
+      setInventory(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
-      message.error('获取库存数据失败');
-      console.error(error);
+      console.error('获取库存列表失败:', error);
+      setInventory([]); // 出错时设置空数组
     } finally {
       setLoading(false);
     }
@@ -40,167 +32,71 @@ const InventoryManagement: React.FC = () => {
 
   const handleUpdateStock = async (id: number, stock: number) => {
     try {
-      const response = await fetch('/api/inventory/stock', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: id, stock })
-      });
-
-      if (!response.ok) throw new Error('更新库存失败');
-
-      setInventory(items =>
-        items.map(item =>
-          item.id === id ? { ...item, stock } : item
-        )
-      );
+      await axios.post(`/api/admin/products/${id}/stock`, { stock });
       message.success('库存更新成功');
+      fetchInventory();
     } catch (error) {
-      message.error('更新库存失败');
-      console.error(error);
+      message.error('库存更新失败');
     }
   };
 
-  const handleAddProduct = async (values: any) => {
-    try {
-      const response = await fetch('/api/inventory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values)
-      });
+  useEffect(() => {
+    fetchInventory();
+  }, []);
 
-      if (!response.ok) throw new Error('添加商品失败');
-      
-      const data = await response.json();
-      setInventory([...inventory, { ...values, id: data.id }]);
-      message.success('添加商品成功');
-      setIsModalVisible(false);
-      form.resetFields();
-    } catch (error) {
-      message.error('添加商品失败');
-      console.error(error);
-    }
-  };
-
-  const columns: ColumnsType<InventoryItem> = [
+  const columns: ColumnsType<Product> = [
     {
       title: '商品名称',
       dataIndex: 'name',
+      key: 'name',
     },
     {
       title: '类别',
       dataIndex: 'category',
+      key: 'category',
     },
     {
       title: '库存',
       dataIndex: 'stock',
+      key: 'stock',
       render: (stock: number, record) => (
-        <InputNumber
-          min={0}
-          value={stock}
-          onChange={(value) => handleUpdateStock(record.id, value || 0)}
-        />
+        <>
+          <InputNumber
+            min={0}
+            value={stock}
+            onChange={(value) => handleUpdateStock(record.id, value || 0)}
+          />
+          {stock < 10 && <Tag color="red" style={{ marginLeft: 8 }}>库存不足</Tag>}
+        </>
       ),
     },
     {
       title: '价格',
       dataIndex: 'price',
+      key: 'price',
       render: (price: number) => `¥${price.toFixed(2)}`,
     },
     {
       title: '销量',
       dataIndex: 'sales',
+      key: 'sales',
     },
     {
       title: '更新时间',
       dataIndex: 'updated_at',
-      render: (time: string) => new Date(time).toLocaleString(),
-    }
+      key: 'updated_at',
+      render: (date: string) => new Date(date).toLocaleString(),
+    },
   ];
 
   return (
-    <div>
-      <div style={{ marginBottom: 16 }}>
-        <Button 
-          type="primary" 
-          onClick={() => {
-            setEditingItem(null);
-            form.resetFields();
-            setIsModalVisible(true);
-          }}
-        >
-          添加商品
-        </Button>
-      </div>
-      
-      <Table 
-        columns={columns} 
-        dataSource={inventory} 
+    <div style={{ padding: '24px' }}>
+      <Table
+        columns={columns}
+        dataSource={inventory || []} // 添加空数组作为后备
         rowKey="id"
         loading={loading}
       />
-      
-      <Modal
-        title="添加商品"
-        open={isModalVisible}
-        onCancel={() => {
-          setIsModalVisible(false);
-          form.resetFields();
-        }}
-        footer={null}
-      >
-        <Form
-          form={form}
-          onFinish={handleAddProduct}
-          layout="vertical"
-        >
-          <Form.Item
-            name="name"
-            label="商品名称"
-            rules={[{ required: true, message: '请输入商品名称' }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="category"
-            label="类别"
-            rules={[{ required: true, message: '请输入商品类别' }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="price"
-            label="价格"
-            rules={[{ required: true, message: '请输入价格' }]}
-          >
-            <InputNumber
-              min={0}
-              precision={2}
-              style={{ width: '100%' }}
-              prefix="¥"
-            />
-          </Form.Item>
-          <Form.Item
-            name="stock"
-            label="初始库存"
-            rules={[{ required: true, message: '请输入初始库存' }]}
-          >
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit">
-                添加
-              </Button>
-              <Button onClick={() => {
-                setIsModalVisible(false);
-                form.resetFields();
-              }}>
-                取消
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 };

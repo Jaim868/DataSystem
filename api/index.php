@@ -37,6 +37,12 @@ if ($uri[0] === 'api') {
                 } else {
                     $productController->getProducts();
                 }
+            } else if ($requestMethod === 'POST') {
+                $productController->createProduct();
+            } else if ($requestMethod === 'PUT' && isset($uri[2])) {
+                $productController->updateProduct($uri[2]);
+            } else if ($requestMethod === 'DELETE' && isset($uri[2])) {
+                $productController->deleteProduct($uri[2]);
             }
             break;
             
@@ -57,6 +63,54 @@ if ($uri[0] === 'api') {
                 $orderController->getOrders();
             } else if ($requestMethod === 'POST') {
                 $orderController->createOrder();
+            }
+            break;
+            
+        case 'admin':
+            require_once './controllers/DashboardController.php';
+            require_once './controllers/EmployeeController.php';
+            require_once './controllers/ProductManagementController.php';
+            
+            $dashboardController = new DashboardController();
+            $employeeController = new EmployeeController();
+            $productManagementController = new ProductManagementController();
+            
+            if ($uri[2] === 'dashboard') {
+                $dashboardController->getDashboardStats();
+            } else if ($uri[2] === 'employees') {
+                if ($requestMethod === 'GET') {
+                    $employeeController->getEmployees();
+                } else if ($requestMethod === 'POST') {
+                    $employeeController->addEmployee();
+                } else if ($requestMethod === 'PUT' && isset($uri[3])) {
+                    $employeeController->updateEmployee($uri[3]);
+                } else if ($requestMethod === 'DELETE' && isset($uri[3])) {
+                    $employeeController->deleteEmployee($uri[3]);
+                }
+            } else if ($uri[2] === 'products') {
+                if ($requestMethod === 'GET') {
+                    $productManagementController->getProducts();
+                } else if ($requestMethod === 'POST') {
+                    if (isset($_POST['_method']) && $_POST['_method'] === 'PUT' && isset($uri[3])) {
+                        $productManagementController->updateProduct($uri[3]);
+                    } else {
+                        $productManagementController->addProduct();
+                    }
+                } else if ($requestMethod === 'DELETE' && isset($uri[3])) {
+                    $productManagementController->deleteProduct($uri[3]);
+                }
+            } else if ($uri[2] === 'orders') {
+                if ($requestMethod === 'GET') {
+                    $orderController->getOrders();
+                } else if ($requestMethod === 'POST' && $uri[3] === 'status') {
+                    $orderController->updateOrderStatus();
+                }
+            } else if ($uri[2] === 'inventory') {
+                if ($requestMethod === 'GET') {
+                    $productManagementController->getProducts();
+                } else if ($requestMethod === 'POST' && isset($uri[3]) && $uri[4] === 'stock') {
+                    $productManagementController->updateStock($uri[3]);
+                }
             }
             break;
             

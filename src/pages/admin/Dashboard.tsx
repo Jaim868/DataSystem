@@ -1,164 +1,274 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Spin } from 'antd';
-import { ShoppingCartOutlined, DollarOutlined, WarningOutlined } from '@ant-design/icons';
-import ReactECharts from 'echarts-for-react';
+import { Row, Col, Card, Statistic, Table, Progress, List, Typography } from 'antd';
+import { Area } from '@ant-design/plots';
+import { 
+  ShoppingCartOutlined, 
+  DollarOutlined, 
+  ExclamationCircleOutlined,
+  RiseOutlined,
+  ShopOutlined,
+  FireOutlined
+} from '@ant-design/icons';
+import axios from 'axios';
+
+const { Title, Text } = Typography;
 
 interface DashboardData {
-  monthlySales: {
-    month: string;
-    total_sales: number;
+  today: {
+    orders: number;
+    sales: number;
+  };
+  total: {
+    orders: number;
+    sales: number;
+  };
+  low_stock: number;
+  sales_trend: Array<{
+    date: string;
     order_count: number;
-  }[];
-  categorySales: {
-    category: string;
-    sales_count: number;
-    category_sales: number;
-  }[];
-  topProducts: {
+    daily_sales: number;
+  }>;
+  top_products: Array<{
     name: string;
-    total_quantity: number;
+    sales: number;
+    stock: number;
+    price: number;
+  }>;
+  category_stats: Array<{
+    category: string;
+    count: number;
     total_sales: number;
-  }[];
-}
-
-interface Overview {
-  todayOrders: number;
-  todaySales: number;
-  lowStockCount: number;
+  }>;
 }
 
 const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [overview, setOverview] = useState<Overview | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetchDashboardStats(),
-      fetchOverview()
-    ]).finally(() => setLoading(false));
+    fetchDashboardData();
   }, []);
 
-  const fetchDashboardStats = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const response = await fetch('/api/dashboard/stats');
-      if (!response.ok) throw new Error('获���统计数据失败');
-      const data = await response.json();
-      setDashboardData(data);
+      const response = await axios.get('/api/admin/dashboard');
+      setData(response.data);
     } catch (error) {
-      console.error('获取统计数据失败:', error);
+      console.error('获取仪表盘数据失败:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchOverview = async () => {
-    try {
-      const response = await fetch('/api/dashboard/overview');
-      if (!response.ok) throw new Error('获取概览数据失败');
-      const data = await response.json();
-      setOverview(data);
-    } catch (error) {
-      console.error('获取概览数据失败:', error);
+  // 配置销售趋势图表
+  const areaConfig = {
+    data: data?.sales_trend?.map(item => ({
+      time: item.date.substring(5),
+      Sales: Number(item.daily_sales || 0)
+    })) || [],
+    xField: 'time',
+    yField: 'Sales',
+    smooth: true,
+    animation: true,
+    xAxis: {
+      tickCount: 7,
+      grid: null
+    },
+    yAxis: {
+      label: {
+        formatter: (v: string) => `¥${Number(v).toFixed(2)}`
+      }
+    },
+    areaStyle: {
+      fill: 'l(270) 0:#ffffff 1:rgb(24, 144, 255, 0.2)'
+    },
+    line: {
+      color: '#1890ff'
+    },
+    tooltip: {
+      title: '销售额',
+      position: 'top',
+      domStyles: {
+        'g2-tooltip': {
+          padding: '6px',
+          background: '#fff',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+        }
+      },
+      fields: ['Sales'],
+      formatter: (_: any, Sales: number) => {
+        return {
+          name: '销售额',
+          Sales: `¥${Sales.toFixed(2)}`
+        };
+      }
     }
   };
 
-  const salesTrendOption = dashboardData ? {
-    title: { text: '月度销售趋势' },
-    tooltip: { trigger: 'axis' },
-    xAxis: {
-      type: 'category',
-      data: dashboardData.monthlySales.map(item => item.month)
-    },
-    yAxis: { type: 'value' },
-    series: [{
-      data: dashboardData.monthlySales.map(item => item.total_sales),
-      type: 'line',
-      smooth: true
-    }]
-  } : {};
-
-  const categorySalesOption = dashboardData ? {
-    title: { text: '商品类别销售占比' },
-    tooltip: { trigger: 'item' },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      data: dashboardData.categorySales.map(item => ({
-        value: item.category_sales,
-        name: item.category
-      }))
-    }]
-  } : {};
-
-  const topProductsOption = dashboardData ? {
-    title: { text: '热销商品TOP5' },
-    tooltip: { trigger: 'axis' },
-    xAxis: {
-      type: 'category',
-      data: dashboardData.topProducts.map(item => item.name)
-    },
-    yAxis: { type: 'value' },
-    series: [{
-      data: dashboardData.topProducts.map(item => item.total_quantity),
-      type: 'bar'
-    }]
-  } : {};
-
-  if (loading) {
-    return <Spin size="large" />;
-  }
+  // 计算最高销量用于百分比计算
+  const maxSales = data?.top_products?.[0]?.sales || 0;
 
   return (
-    <div>
-      <Row gutter={16}>
-        <Col span={8}>
-          <Card>
+    <div style={{ padding: '24px' }}>
+      {/* 顶部统计卡片 */}
+      <Row gutter={[16, 16]}>
+        <Col span={6}>
+          <Card loading={loading}>
             <Statistic
               title="今日订单数"
-              value={overview?.todayOrders || 0}
+              value={data?.today.orders || 0}
               prefix={<ShoppingCartOutlined />}
+              valueStyle={{ color: '#1890ff' }}
             />
+            <div style={{ marginTop: 8 }}>
+              <Text type="secondary">销售额: ¥{data?.today.sales.toFixed(2) || '0.00'}</Text>
+            </div>
           </Card>
         </Col>
-        <Col span={8}>
-          <Card>
+        <Col span={6}>
+          <Card loading={loading}>
             <Statistic
-              title="今日销售额"
-              value={overview?.todaySales || 0}
-              precision={2}
+              title="总订单数"
+              value={data?.total.orders || 0}
+              prefix={<ShopOutlined />}
+              valueStyle={{ color: '#52c41a' }}
+            />
+            <div style={{ marginTop: 8 }}>
+              <Text type="secondary">总销售额: ¥{data?.total.sales.toFixed(2) || '0.00'}</Text>
+            </div>
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card loading={loading}>
+            <Statistic
+              title="库存预警"
+              value={data?.low_stock || 0}
+              prefix={<ExclamationCircleOutlined />}
+              valueStyle={{ color: data?.low_stock ? '#ff4d4f' : '#52c41a' }}
+            />
+            <div style={{ marginTop: 8 }}>
+              <Text type="secondary">需要补货的商品数量</Text>
+            </div>
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card loading={loading}>
+            <Statistic
+              title="平均客单价"
+              value={data?.total.orders ? (data.total.sales / data.total.orders).toFixed(2) : '0.00'}
               prefix={<DollarOutlined />}
-              suffix="元"
+              valueStyle={{ color: '#722ed1' }}
             />
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card>
-            <Statistic
-              title="库存预警商品数"
-              value={overview?.lowStockCount || 0}
-              prefix={<WarningOutlined />}
-              valueStyle={{ color: '#cf1322' }}
-            />
+            <div style={{ marginTop: 8 }}>
+              <Text type="secondary">总销售额/总订单数</Text>
+            </div>
           </Card>
         </Col>
       </Row>
 
-      <Row gutter={16} style={{ marginTop: 16 }}>
-        <Col span={24}>
-          <Card>
-            <ReactECharts option={salesTrendOption} style={{ height: 400 }} />
-          </Card>
-        </Col>
-      </Row>
+      {/* 销售趋势图 */}
+      <Card
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <RiseOutlined style={{ color: '#1890ff', marginRight: 8 }} />
+            <span>近7天销售趋势</span>
+          </div>
+        }
+        style={{ marginTop: '24px' }}
+        loading={loading}
+      >
+        {data?.sales_trend && (
+          <div style={{ height: 400 }}>
+            <Area {...areaConfig} />
+          </div>
+        )}
+      </Card>
 
-      <Row gutter={16} style={{ marginTop: 16 }}>
+      <Row gutter={[16, 16]} style={{ marginTop: '24px' }}>
+        {/* 热销商品榜 */}
         <Col span={12}>
-          <Card>
-            <ReactECharts option={categorySalesOption} style={{ height: 400 }} />
+          <Card 
+            title={
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <FireOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />
+                <span>热销商品TOP5</span>
+              </div>
+            }
+            loading={loading}
+          >
+            <List
+              dataSource={data?.top_products || []}
+              renderItem={(item, index) => (
+                <List.Item>
+                  <List.Item.Meta
+                    avatar={
+                      <div 
+                        style={{ 
+                          width: 24, 
+                          height: 24, 
+                          borderRadius: '50%',
+                          background: index < 3 ? '#1890ff' : '#f0f0f0',
+                          color: index < 3 ? '#fff' : '#666',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        {index + 1}
+                      </div>
+                    }
+                    title={
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>{item.name}</span>
+                        <span style={{ color: '#1890ff' }}>{item.sales}件</span>
+                      </div>
+                    }
+                    description={
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ marginBottom: 4 }}>
+                          <Text type="secondary">
+                            库存: {item.stock} | 单价: ¥{item.price}
+                          </Text>
+                        </div>
+                        <Progress 
+                          percent={maxSales > 0 ? Math.round((item.sales / maxSales) * 100) : 0}
+                          strokeColor={{
+                            '0%': '#1890ff',
+                            '100%': '#69c0ff',
+                          }}
+                          size="small"
+                          showInfo={false}
+                        />
+                      </div>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
           </Card>
         </Col>
+
+        {/* 分类统计 */}
         <Col span={12}>
-          <Card>
-            <ReactECharts option={topProductsOption} style={{ height: 400 }} />
+          <Card title="分类统计" loading={loading}>
+            <List
+              dataSource={data?.category_stats || []}
+              renderItem={item => (
+                <List.Item>
+                  <List.Item.Meta
+                    title={item.category}
+                    description={`商品数量: ${item.count} | 总销量: ${item.total_sales}`}
+                  />
+                  <div>
+                    <Progress 
+                      percent={Math.round((item.count / (data?.category_stats.reduce((acc, curr) => acc + curr.count, 0) || 1)) * 100)} 
+                      strokeColor="#52c41a"
+                    />
+                  </div>
+                </List.Item>
+              )}
+            />
           </Card>
         </Col>
       </Row>

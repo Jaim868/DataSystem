@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Space, Popconfirm, message } from 'antd';
+import { Table, Button, Modal, Form, Input, message, Space, Popconfirm } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import axios from 'axios';
 
 interface Employee {
   id: number;
@@ -8,141 +9,109 @@ interface Employee {
   position: string;
   email: string;
   phone: string;
-  hireDate: string;
+  hire_date: string;
 }
 
 const EmployeeManagement: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [form] = Form.useForm();
 
-  useEffect(() => {
-    fetchEmployees();
-  }, []);
-
   const fetchEmployees = async () => {
+    setLoading(true);
     try {
-      const response = await fetch('/api/employees');
-      if (!response.ok) throw new Error('获取员工列表失败');
-      const data = await response.json();
-      setEmployees(data);
+      const response = await axios.get('/api/admin/employees');
+      setEmployees(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
-      message.error('获取员工列表失败');
-      console.error(error);
+      console.error('获取员工列表失败:', error);
+      setEmployees([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAdd = async (values: any) => {
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const handleSubmit = async (values: any) => {
     try {
-      const response = await fetch('/api/employees', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values)
-      });
-
-      if (!response.ok) throw new Error('添加员工失败');
-      
-      const data = await response.json();
-      setEmployees([...employees, { ...values, id: data.id }]);
-      message.success('添加成功');
-      setIsModalVisible(false);
+      if (editingEmployee) {
+        await axios.put(`/api/admin/employees/${editingEmployee.id}`, values);
+        message.success('员工信息更新成功');
+      } else {
+        await axios.post('/api/admin/employees', values);
+        message.success('员工添加成功');
+      }
+      setModalVisible(false);
       form.resetFields();
+      fetchEmployees();
     } catch (error) {
-      message.error('添加员工失败');
-      console.error(error);
-    }
-  };
-
-  const handleEdit = async (values: any) => {
-    if (!editingEmployee) return;
-    
-    try {
-      const response = await fetch(`/api/employees/${editingEmployee.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values)
-      });
-
-      if (!response.ok) throw new Error('更新员工失败');
-
-      setEmployees(employees.map(emp => 
-        emp.id === editingEmployee.id ? { ...emp, ...values } : emp
-      ));
-      message.success('更新成功');
-      setIsModalVisible(false);
-      setEditingEmployee(null);
-      form.resetFields();
-    } catch (error) {
-      message.error('更新员工失败');
-      console.error(error);
+      message.error('操作失败');
     }
   };
 
   const handleDelete = async (id: number) => {
     try {
-      const response = await fetch(`/api/employees/${id}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) throw new Error('删除员工失败');
-
-      setEmployees(employees.filter(emp => emp.id !== id));
-      message.success('删除成功');
+      await axios.delete(`/api/admin/employees/${id}`);
+      message.success('员工删除成功');
+      fetchEmployees();
     } catch (error) {
-      message.error('删除员工失败');
-      console.error(error);
+      message.error('删除失败');
     }
   };
 
   const columns: ColumnsType<Employee> = [
     {
-      title: '员工ID',
-      dataIndex: 'id',
-    },
-    {
       title: '姓名',
       dataIndex: 'name',
+      key: 'name',
     },
     {
       title: '职位',
       dataIndex: 'position',
-    },
-    {
-      title: '电话',
-      dataIndex: 'phone',
+      key: 'position',
     },
     {
       title: '邮箱',
       dataIndex: 'email',
+      key: 'email',
+    },
+    {
+      title: '电话',
+      dataIndex: 'phone',
+      key: 'phone',
     },
     {
       title: '入职日期',
-      dataIndex: 'hireDate',
+      dataIndex: 'hire_date',
+      key: 'hire_date',
+      render: (date: string) => new Date(date).toLocaleDateString(),
     },
     {
       title: '操作',
       key: 'action',
       render: (_, record) => (
         <Space>
-          <Button 
-            type="link" 
+          <Button
+            type="link"
             onClick={() => {
               setEditingEmployee(record);
               form.setFieldsValue(record);
-              setIsModalVisible(true);
+              setModalVisible(true);
             }}
           >
             编辑
           </Button>
           <Popconfirm
-            title="确定要删除吗？"
+            title="确定要删除这名员工吗？"
             onConfirm={() => handleDelete(record.id)}
           >
-            <Button type="link" danger>删除</Button>
+            <Button type="link" danger>
+              删除
+            </Button>
           </Popconfirm>
         </Space>
       ),
@@ -151,26 +120,30 @@ const EmployeeManagement: React.FC = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Button 
-          type="primary" 
-          onClick={() => {
-            setEditingEmployee(null);
-            form.resetFields();
-            setIsModalVisible(true);
-          }}
-        >
-          添加员工
-        </Button>
-      </div>
-      
-      <Table columns={columns} dataSource={employees} rowKey="id" />
-      
+      <Button
+        type="primary"
+        onClick={() => {
+          setEditingEmployee(null);
+          form.resetFields();
+          setModalVisible(true);
+        }}
+        style={{ marginBottom: 16 }}
+      >
+        添加员工
+      </Button>
+
+      <Table
+        columns={columns}
+        dataSource={employees}
+        rowKey="id"
+        loading={loading}
+      />
+
       <Modal
-        title={editingEmployee ? "编辑员工" : "添加员工"}
-        open={isModalVisible}
+        title={editingEmployee ? '编辑员工' : '添加员工'}
+        open={modalVisible}
         onCancel={() => {
-          setIsModalVisible(false);
+          setModalVisible(false);
           setEditingEmployee(null);
           form.resetFields();
         }}
@@ -178,9 +151,8 @@ const EmployeeManagement: React.FC = () => {
       >
         <Form
           form={form}
-          onFinish={editingEmployee ? handleEdit : handleAdd}
           layout="vertical"
-          initialValues={editingEmployee || {}}
+          onFinish={handleSubmit}
         >
           <Form.Item
             name="name"
@@ -197,13 +169,6 @@ const EmployeeManagement: React.FC = () => {
             <Input />
           </Form.Item>
           <Form.Item
-            name="phone"
-            label="电话"
-            rules={[{ required: true, message: '请输入电话' }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
             name="email"
             label="邮箱"
             rules={[
@@ -214,25 +179,16 @@ const EmployeeManagement: React.FC = () => {
             <Input />
           </Form.Item>
           <Form.Item
-            name="hireDate"
-            label="入职日期"
-            rules={[{ required: true, message: '请输入入职日期' }]}
+            name="phone"
+            label="电话"
+            rules={[{ required: true, message: '请输入电话' }]}
           >
-            <Input type="date" />
+            <Input />
           </Form.Item>
           <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit">
-                {editingEmployee ? '保存' : '添加'}
-              </Button>
-              <Button onClick={() => {
-                setIsModalVisible(false);
-                setEditingEmployee(null);
-                form.resetFields();
-              }}>
-                取消
-              </Button>
-            </Space>
+            <Button type="primary" htmlType="submit" block>
+              {editingEmployee ? '更新' : '添加'}
+            </Button>
           </Form.Item>
         </Form>
       </Modal>

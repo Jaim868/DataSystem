@@ -1,20 +1,19 @@
 import React from 'react';
 import { Layout, Menu, Button } from 'antd';
-import { Routes, Route, Link } from 'react-router-dom';
+import { Link, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import {
   TeamOutlined,
   ShoppingCartOutlined,
   InboxOutlined,
   ShopOutlined,
-  LogoutOutlined,
-  DashboardOutlined
+  DashboardOutlined,
+  LogoutOutlined
 } from '@ant-design/icons';
 import EmployeeManagement from '../pages/admin/EmployeeManagement';
 import OrderManagement from '../pages/admin/OrderManagement';
 import InventoryManagement from '../pages/admin/InventoryManagement';
 import ProductManagement from '../pages/admin/ProductManagement';
 import Dashboard from '../pages/admin/Dashboard';
-import { useNavigate } from 'react-router-dom';
 
 const { Header, Sider, Content } = Layout;
 
@@ -36,31 +35,32 @@ const AdminLayout: React.FC = () => {
       </Header>
       <Layout>
         <Sider width={200}>
-          <Menu mode="inline" theme="dark" defaultSelectedKeys={['employees']}>
+          <Menu mode="inline" theme="dark" defaultSelectedKeys={['dashboard']}>
+            <Menu.Item key="dashboard" icon={<DashboardOutlined />}>
+              <Link to="/admin/dashboard">仪表盘</Link>
+            </Menu.Item>
             <Menu.Item key="employees" icon={<TeamOutlined />}>
               <Link to="/admin/employees">员工管理</Link>
             </Menu.Item>
             <Menu.Item key="orders" icon={<ShoppingCartOutlined />}>
               <Link to="/admin/orders">订单管理</Link>
             </Menu.Item>
-            <Menu.Item key="inventory" icon={<InboxOutlined />}>
-              <Link to="/admin/inventory">库存管理</Link>
-            </Menu.Item>
             <Menu.Item key="products" icon={<ShopOutlined />}>
               <Link to="/admin/products">商品管理</Link>
             </Menu.Item>
-            <Menu.Item key="dashboard" icon={<DashboardOutlined />}>
-              <Link to="/admin/dashboard">仪表板</Link>
+            <Menu.Item key="inventory" icon={<InboxOutlined />}>
+              <Link to="/admin/inventory">库存管理</Link>
             </Menu.Item>
           </Menu>
         </Sider>
         <Content style={{ padding: '24px', minHeight: 280 }}>
           <Routes>
+            <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/employees" element={<EmployeeManagement />} />
             <Route path="/orders" element={<OrderManagement />} />
-            <Route path="/inventory" element={<InventoryManagement />} />
             <Route path="/products" element={<ProductManagement />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/inventory" element={<InventoryManagement />} />
           </Routes>
         </Content>
       </Layout>

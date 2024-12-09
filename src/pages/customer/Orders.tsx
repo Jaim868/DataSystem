@@ -15,7 +15,7 @@ interface OrderItem {
 interface Order {
   order_no: string;
   total_amount: number;
-  status: 'pending' | 'processing' | 'completed' | 'cancelled';
+  status: 'pending' | 'shipped';
   created_at: string;
   items: OrderItem[];
 }
@@ -103,10 +103,8 @@ const Orders: React.FC = () => {
       key: 'status',
       render: (status: string) => {
         const statusMap = {
-          pending: { text: '待处理', color: 'blue' },
-          processing: { text: '处理中', color: 'orange' },
-          completed: { text: '已完成', color: 'green' },
-          cancelled: { text: '已取消', color: 'red' },
+          pending: { text: '待发货', color: 'gold' },
+          shipped: { text: '已发货', color: 'green' }
         };
         const { text, color } = statusMap[status as keyof typeof statusMap] || { text: '未知', color: 'default' };
         return <Tag color={color}>{text}</Tag>;

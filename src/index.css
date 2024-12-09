@@ -206,4 +206,111 @@ html {
 
 .hover-card:hover {
   transform: perspective(1000px) rotateX(5deg);
+}
+
+/* 商品详情页样式 */
+.product-detail {
+  background: #fff;
+}
+
+.product-detail .ant-typography {
+  color: #1f1f1f;
+}
+
+.product-detail-title {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  letter-spacing: -0.5px;
+}
+
+.product-detail-description {
+  color: #6e6e73 !important;
+  max-width: 800px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.product-detail-price {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  color: #1677ff !important;
+}
+
+.product-detail-card {
+  transition: all 0.3s ease;
+}
+
+.product-detail-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.product-detail-image {
+  transition: transform 0.3s ease;
+}
+
+.product-detail-image:hover {
+  transform: scale(1.02);
+}
+
+.product-detail-features li {
+  margin-bottom: 12px;
+  color: #1f1f1f;
+  line-height: 1.6;
+}
+
+.product-detail-tabs .ant-tabs-nav::before {
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.product-detail-tabs .ant-tabs-tab {
+  font-size: 16px;
+  padding: 12px 0;
+}
+
+.product-detail-tabs .ant-tabs-tab-active {
+  font-weight: 600;
+}
+
+.product-detail-tabs .ant-tabs-ink-bar {
+  background: #1677ff;
+  height: 3px;
+}
+
+/* 购买按钮样式 */
+.buy-button {
+  background: linear-gradient(to right, #1677ff, #4096ff) !important;
+  border: none !important;
+  height: 50px !important;
+  font-size: 18px !important;
+  font-weight: 500 !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  transition: all 0.3s ease !important;
+}
+
+.buy-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.3);
+}
+
+.buy-button:active {
+  transform: translateY(0);
+}
+
+/* 数量选择器样式 */
+.ant-input-number {
+  border-radius: 8px !important;
+  border: 2px solid #f0f0f0 !important;
+  transition: all 0.3s ease;
+}
+
+.ant-input-number:hover,
+.ant-input-number:focus {
+  border-color: #1677ff !important;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1) !important;
+}
+
+/* 分隔线样式 */
+.ant-divider {
+  margin: 24px 0 !important;
+  border-top: 1px solid #f0f0f0 !important;
 } 
