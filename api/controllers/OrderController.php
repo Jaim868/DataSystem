@@ -5,206 +5,432 @@ class OrderController {
     private $db;
 
     public function __construct() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
         $this->db = Database::getInstance()->getConnection();
+    }
+
+    public function createOrder() {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception('用户未登录');
+            }
+
+            // 获取用户购物车商品
+            $stmt = $this->db->prepare("
+                SELECT 
+                    c.product_id,
+                    c.quantity,
+                    p.price,
+                    p.stock,
+                    p.name
+                FROM cart_items c
+                JOIN products p ON c.product_id = p.id
+                WHERE c.user_id = ?
+            ");
+            $stmt->execute([$userId]);
+            $cartItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($cartItems)) {
+                throw new Exception('购物车为空');
+            }
+
+            $this->db->beginTransaction();
+
+            // 生成订单编号
+            $orderNo = date('YmdHis') . str_pad(mt_rand(1, 9999), 4, '0', STR_PAD_LEFT);
+
+            // 创建订单
+            $stmt = $this->db->prepare("
+                INSERT INTO orders (order_no, user_id, store_id, total_amount, status, created_at)
+                VALUES (?, ?, ?, ?, 'pending', NOW())
+            ");
+
+            // 计算总金额
+            $totalAmount = array_reduce($cartItems, function($sum, $item) {
+                return $sum + ($item['price'] * $item['quantity']);
+            }, 0);
+
+            // 获取商店ID（这里简单起见，使用第一个商店）
+            $storeId = 1;
+
+            $stmt->execute([$orderNo, $userId, $storeId, $totalAmount]);
+
+            // 添加订单项目
+            $stmt = $this->db->prepare("
+                INSERT INTO order_items (order_no, product_id, quantity, price)
+                VALUES (?, ?, ?, ?)
+            ");
+
+            // 更新库存
+            $updateStockStmt = $this->db->prepare("
+                UPDATE products 
+                SET stock = stock - ? 
+                WHERE id = ? AND stock >= ?
+            ");
+
+            foreach ($cartItems as $item) {
+                // 检查库存
+                if ($item['stock'] < $item['quantity']) {
+                    throw new Exception("商品 {$item['name']} 库存不足");
+                }
+
+                // 添加订单项
+                $stmt->execute([
+                    $orderNo,
+                    $item['product_id'],
+                    $item['quantity'],
+                    $item['price']
+                ]);
+
+                // 更新库存
+                $updateStockStmt->execute([
+                    $item['quantity'],
+                    $item['product_id'],
+                    $item['quantity']
+                ]);
+            }
+
+            // 清空购物车
+            $stmt = $this->db->prepare("
+                DELETE FROM cart_items WHERE user_id = ?
+            ");
+            $stmt->execute([$userId]);
+
+            $this->db->commit();
+
+            echo json_encode([
+                'success' => true,
+                'message' => '订单创建成功',
+                'orderNo' => $orderNo
+            ]);
+        } catch (Exception $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
     }
 
     public function getOrders() {
         try {
-            $userId = $_GET['userId'] ?? null;
-            // 通过请求路径判断是否为管理员访问
-            $isAdmin = strpos($_SERVER['REQUEST_URI'], '/api/admin/') === 0;
-            
-            // 管理员可以查看所有订单，普通用户只能查看自己的订单
-            $sql = "
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception('用户未登录');
+            }
+
+            $stmt = $this->db->prepare("
                 SELECT 
                     o.order_no,
                     o.total_amount,
                     o.status,
                     o.created_at,
-                    u.username as customer_name,
-                    JSON_ARRAYAGG(
-                        JSON_OBJECT(
-                            'id', oi.id,
-                            'name', p.name,
-                            'price', CAST(oi.price AS FLOAT),
-                            'quantity', oi.quantity,
-                            'product_id', p.id
-                        )
-                    ) as items
+                    COUNT(oi.id) as item_count,
+                    GROUP_CONCAT(DISTINCT p.name) as product_names
                 FROM orders o
-                INNER JOIN order_items oi ON o.order_no = oi.order_no
-                INNER JOIN products p ON oi.product_id = p.id
-                INNER JOIN users u ON o.user_id = u.id
-            ";
-
-            if (!$isAdmin && $userId) {
-                $sql .= " WHERE o.user_id = ?";
-            }
-
-            $sql .= " GROUP BY o.order_no, o.total_amount, o.status, o.created_at, u.username
-                      ORDER BY o.created_at DESC";
-
-            $stmt = $this->db->prepare($sql);
-            
-            if (!$isAdmin && $userId) {
-                $stmt->execute([$userId]);
-            } else {
-                $stmt->execute();
-            }
-
+                LEFT JOIN order_items oi ON o.order_no = oi.order_no
+                LEFT JOIN products p ON oi.product_id = p.id
+                WHERE o.user_id = ?
+                GROUP BY o.order_no, o.total_amount, o.status, o.created_at
+                ORDER BY o.created_at DESC
+            ");
+            $stmt->execute([$userId]);
             $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // 处理订单项的 JSON 数据
+            // 确保数值类型正确
             foreach ($orders as &$order) {
-                $order['items'] = json_decode($order['items'], true);
-                $order['total_amount'] = floatval($order['total_amount']);
+                $order['total_amount'] = (float)$order['total_amount'];
+                $order['item_count'] = (int)$order['item_count'];
+                
+                // 处理商品名称列表
+                $order['product_names'] = $order['product_names'] 
+                    ? explode(',', $order['product_names']) 
+                    : [];
             }
 
-            header('Content-Type: application/json');
             echo json_encode($orders);
-        } catch(Exception $e) {
-            error_log('Get orders error: ' . $e->getMessage());
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function getOrder($orderNo) {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception('用户未登录');
+            }
+
+            // 获取订单基本信息
+            $stmt = $this->db->prepare("
+                SELECT 
+                    o.order_no,
+                    o.total_amount,
+                    o.status,
+                    o.created_at
+                FROM orders o
+                WHERE o.order_no = ? AND o.user_id = ?
+            ");
+            $stmt->execute([$orderNo, $userId]);
+            $order = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$order) {
+                throw new Exception('订单不存在');
+            }
+
+            // 获取订单项目
+            $stmt = $this->db->prepare("
+                SELECT 
+                    oi.id,
+                    oi.product_id,
+                    p.name as product_name,
+                    p.image_url,
+                    oi.quantity,
+                    oi.price
+                FROM order_items oi
+                JOIN products p ON oi.product_id = p.id
+                WHERE oi.order_no = ?
+            ");
+            $stmt->execute([$orderNo]);
+            $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 确保数值类型正确
+            $order['total_amount'] = (float)$order['total_amount'];
+            foreach ($items as &$item) {
+                $item['price'] = (float)$item['price'];
+                $item['quantity'] = (int)$item['quantity'];
+            }
+
+            $order['items'] = $items;
+
+            echo json_encode($order);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function getAdminOrders() {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception('用户未登录');
+            }
+
+            // 验证用户是否是管理员
+            $stmt = $this->db->prepare("
+                SELECT role FROM users WHERE id = ?
+            ");
+            $stmt->execute([$userId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$user || $user['role'] !== 'manager') {
+                throw new Exception('无权限访问');
+            }
+
+            // 获取所有订单
+            $stmt = $this->db->prepare("
+                SELECT 
+                    o.order_no,
+                    u.username as customer_name,
+                    o.total_amount,
+                    o.status,
+                    o.created_at,
+                    s.name as store_name,
+                    COUNT(oi.id) as item_count
+                FROM orders o
+                JOIN users u ON o.user_id = u.id
+                JOIN stores s ON o.store_id = s.id
+                LEFT JOIN order_items oi ON o.order_no = oi.order_no
+                GROUP BY o.order_no, o.user_id, o.total_amount, o.status, o.created_at, u.username, s.name
+                ORDER BY o.created_at DESC
+            ");
+            $stmt->execute();
+            $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 处理数据格式
+            foreach ($orders as &$order) {
+                $order['total_amount'] = (float)$order['total_amount'];
+                $order['item_count'] = (int)$order['item_count'];
+                
+                // 获取订单详情
+                $stmt = $this->db->prepare("
+                    SELECT 
+                        p.name as product_name,
+                        oi.quantity,
+                        oi.price
+                    FROM order_items oi
+                    JOIN products p ON oi.product_id = p.id
+                    WHERE oi.order_no = ?
+                ");
+                $stmt->execute([$order['order_no']]);
+                $order['items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+
+            echo json_encode($orders);
+        } catch (Exception $e) {
+            error_log('Admin orders error: ' . $e->getMessage());
             http_response_code(500);
             echo json_encode([
-                'error' => '获取订单列表失败',
-                'message' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
         }
     }
 
-    public function updateOrderStatus() {
+    public function updateOrderStatus($orderNo) {
         try {
-            $this->db->beginTransaction();
-            
-            $data = json_decode(file_get_contents('php://input'), true);
-            
-            // 获取订单当前状态
-            $stmt = $this->db->prepare("
-                SELECT status FROM orders WHERE order_no = ?
-            ");
-            $stmt->execute([$data['orderNo']]);
-            $currentStatus = $stmt->fetch(PDO::FETCH_ASSOC)['status'];
-
-            // 只有从未发货状态改为已发货状态时才需要更新库存
-            if ($currentStatus === 'pending' && $data['status'] === 'shipped') {
-                // 获取订单项并更新库存
-                $stmt = $this->db->prepare("
-                    SELECT oi.product_id, oi.quantity
-                    FROM order_items oi
-                    WHERE oi.order_no = ?
-                ");
-                $stmt->execute([$data['orderNo']]);
-                $orderItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                // 更新每个商品的库存和销量
-                foreach ($orderItems as $item) {
-                    $stmt = $this->db->prepare("
-                        UPDATE products 
-                        SET 
-                            stock = stock - ?,
-                            sales = sales + ?,
-                            updated_at = NOW()
-                        WHERE id = ? AND stock >= ?
-                    ");
-                    $result = $stmt->execute([
-                        $item['quantity'],
-                        $item['quantity'],
-                        $item['product_id'],
-                        $item['quantity']
-                    ]);
-
-                    if (!$result) {
-                        throw new Exception('库存不足');
-                    }
-                }
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception('用户未登录');
             }
 
-            // 更新订单状态
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (!isset($data['status'])) {
+                throw new Exception('缺少状态参数');
+            }
+
+            // 验证用户权限（管理员或对应商店的员工）
+            $stmt = $this->db->prepare("
+                SELECT 
+                    u.role,
+                    CASE 
+                        WHEN u.role = 'manager' THEN 1
+                        WHEN u.role = 'employee' AND e.store_id = o.store_id THEN 1
+                        ELSE 0
+                    END as has_permission
+                FROM users u
+                LEFT JOIN employees e ON u.id = e.id
+                JOIN orders o ON o.order_no = ?
+                WHERE u.id = ?
+            ");
+            $stmt->execute([$orderNo, $userId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$user || !$user['has_permission']) {
+                throw new Exception('无权限操作此订单');
+            }
+
             $stmt = $this->db->prepare("
                 UPDATE orders 
                 SET status = ?, updated_at = NOW()
                 WHERE order_no = ?
             ");
-            $stmt->execute([
-                $data['status'],
-                $data['orderNo']
-            ]);
+            $stmt->execute([$data['status'], $orderNo]);
 
-            $this->db->commit();
-            header('Content-Type: application/json');
-            echo json_encode(['success' => true]);
-        } catch(Exception $e) {
-            $this->db->rollBack();
+            echo json_encode(['success' => true, 'message' => '订单状态更新成功']);
+        } catch (Exception $e) {
             error_log('Update order status error: ' . $e->getMessage());
             http_response_code(500);
-            echo json_encode([
-                'error' => '更新订单状态失败',
-                'message' => $e->getMessage()
-            ]);
+            echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
-    public function createOrder() {
+    public function getEmployeeOrders() {
         try {
-            $data = json_decode(file_get_contents('php://input'), true);
-            $userId = $_GET['userId'] ?? null;
-
-            // 添加调试日志
-            error_log('Create order request - userId: ' . $userId);
-            error_log('Order data: ' . print_r($data, true));
-
-            if (!$userId || empty($data['items'])) {
-                http_response_code(400);
-                echo json_encode(['error' => '参数错误']);
-                return;
+            $userId = $_SESSION['user_id'] ?? null;
+            error_log("Employee orders request - User ID: " . ($userId ?? 'null'));
+            
+            if (!$userId) {
+                throw new Exception('用户未登录');
             }
 
-            $this->db->beginTransaction();
+            // 验证用户是否是员工并获取所属商店
+            $stmt = $this->db->prepare("
+                SELECT 
+                    u.role, 
+                    u.username,
+                    e.store_id,
+                    s.name as store_name
+                FROM users u
+                LEFT JOIN employees e ON u.id = e.id
+                LEFT JOIN stores s ON e.store_id = s.id
+                WHERE u.id = ? AND u.role = 'employee'
+            ");
+            $stmt->execute([$userId]);
+            $employee = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            error_log("Employee data: " . print_r($employee, true));
 
-            try {
-                // 创建订单
-                $orderNo = date('YmdHis') . rand(1000, 9999);
+            if (!$employee) {
+                throw new Exception('用户不是员工');
+            }
+            
+            if (!$employee['store_id']) {
+                throw new Exception('员工未关联到任何商店');
+            }
+
+            // 获取该商店的所有订单
+            $stmt = $this->db->prepare("
+                SELECT 
+                    o.order_no,
+                    u.username as customer_name,
+                    o.total_amount,
+                    o.status,
+                    o.created_at,
+                    COUNT(oi.id) as item_count
+                FROM orders o
+                JOIN users u ON o.user_id = u.id
+                LEFT JOIN order_items oi ON o.order_no = oi.order_no
+                WHERE o.store_id = ?
+                GROUP BY o.order_no, o.user_id, o.total_amount, o.status, o.created_at, u.username
+                ORDER BY o.created_at DESC
+            ");
+            
+            error_log("Executing order query for store_id: " . $employee['store_id']);
+            $stmt->execute([$employee['store_id']]);
+            $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            error_log("Found " . count($orders) . " orders");
+
+            // 处理数据格式
+            foreach ($orders as &$order) {
+                $order['total_amount'] = (float)$order['total_amount'];
+                $order['item_count'] = (int)$order['item_count'];
+                
+                // 获取订单详情
                 $stmt = $this->db->prepare("
-                    INSERT INTO orders (order_no, user_id, total_amount, status)
-                    VALUES (?, ?, ?, 'pending')
+                    SELECT 
+                        p.name as product_name,
+                        oi.quantity,
+                        oi.price
+                    FROM order_items oi
+                    JOIN products p ON oi.product_id = p.id
+                    WHERE oi.order_no = ?
                 ");
-                $stmt->execute([$orderNo, $userId, $data['totalAmount']]);
+                $stmt->execute([$order['order_no']]);
+                $order['items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-                // 创建订单项
-                $stmt = $this->db->prepare("
-                    INSERT INTO order_items (order_no, product_id, quantity, price)
-                    VALUES (?, ?, ?, ?)
-                ");
-
-                foreach ($data['items'] as $item) {
-                    $stmt->execute([
-                        $orderNo,
-                        $item['product_id'],
-                        $item['quantity'],
-                        $item['price']
-                    ]);
+                foreach ($order['items'] as &$item) {
+                    $item['price'] = (float)$item['price'];
+                    $item['quantity'] = (int)$item['quantity'];
                 }
-
-                // 清空购物车
-                $stmt = $this->db->prepare("DELETE FROM cart_items WHERE user_id = ?");
-                $stmt->execute([$userId]);
-
-                $this->db->commit();
-                header('Content-Type: application/json');
-                echo json_encode([
-                    'success' => true,
-                    'orderNo' => $orderNo
-                ]);
-            } catch (Exception $e) {
-                $this->db->rollBack();
-                throw $e;
             }
-        } catch(PDOException $e) {
-            error_log('Create order error: ' . $e->getMessage());
+
+            echo json_encode([
+                'success' => true,
+                'employee' => [
+                    'username' => $employee['username'],
+                    'store_name' => $employee['store_name'],
+                    'store_id' => $employee['store_id']
+                ],
+                'orders' => $orders
+            ]);
+            
+        } catch (Exception $e) {
+            error_log('Employee orders error: ' . $e->getMessage());
+            error_log('Stack trace: ' . $e->getTraceAsString());
             http_response_code(500);
             echo json_encode([
-                'error' => '创建订单失败',
-                'message' => $e->getMessage()  // 添加详细错误信息
+                'success' => false,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
         }
     }

@@ -1,122 +1,299 @@
 <?php
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: http://localhost:3000');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
-require_once './controllers/ProductController.php';
-require_once './controllers/CartController.php';
-require_once './controllers/OrderController.php';
-require_once './utils/Database.php';
+require_once __DIR__ . '/controllers/ProductController.php';
+require_once __DIR__ . '/controllers/StoreController.php';
+require_once __DIR__ . '/controllers/ProductManagementController.php';
+require_once __DIR__ . '/controllers/AuthController.php';
+require_once __DIR__ . '/controllers/OrderController.php';
+require_once __DIR__ . '/controllers/CartController.php';
+require_once __DIR__ . '/controllers/SupplierController.php';
+require_once __DIR__ . '/controllers/EmployeeController.php';
 
-$requestMethod = $_SERVER['REQUEST_METHOD'];
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$uri = explode('/', trim($uri, '/'));
+$uri = explode('/', $uri);
+array_shift($uri); // 移除第一个空元素
+array_shift($uri); // 移除 'api'
 
-// 实例化控制器
-$productController = new ProductController();
-$cartController = new CartController();
-$orderController = new OrderController();
+// 获取完整的资源路径
+$resource = implode('/', $uri);
 
-// 路由处理
-if ($uri[0] === 'api') {
-    // 登录接口
-    if ($uri[1] === 'login') {
-        require './login.php';
-        exit;
-    }
-    
-    switch ($uri[1]) {
+// 如果最后一个部分是数字，则去掉它
+if (count($uri) > 0 && is_numeric(end($uri))) {
+    $resource = implode('/', array_slice($uri, 0, -1));
+}
+
+try {
+    switch ($resource) {
+        // 产品相关路由
         case 'products':
-            if ($requestMethod === 'GET') {
-                if (isset($uri[2])) {
-                    $productController->getProduct($uri[2]);
-                } else {
-                    $productController->getProducts();
+            $controller = new ProductController();
+            if (is_numeric(end($uri))) {
+                // 获取单个产品详情
+                $id = (int)end($uri);
+                if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                    echo json_encode($controller->getProduct($id));
                 }
-            } else if ($requestMethod === 'POST') {
-                $productController->createProduct();
-            } else if ($requestMethod === 'PUT' && isset($uri[2])) {
-                $productController->updateProduct($uri[2]);
-            } else if ($requestMethod === 'DELETE' && isset($uri[2])) {
-                $productController->deleteProduct($uri[2]);
+            } else {
+                // 获取所有产品
+                if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                    echo json_encode($controller->getAll());
+                }
             }
             break;
             
+        case 'stores':
+            $controller = new StoreController();
+            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                echo json_encode($controller->getAll());
+            }
+            break;
+            
+        case 'admin/stores':
+            $controller = new StoreController();
+            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                echo json_encode($controller->getAdminStores());
+            } else {
+                throw new Exception('不支持的请求方法');
+            }
+            break;
+            
+        // 产品管理相关路由
+        case 'admin/products':
+            $controller = new ProductManagementController();
+            switch ($_SERVER['REQUEST_METHOD']) {
+                case 'GET':
+                    echo json_encode($controller->getAll());
+                    break;
+                case 'POST':
+                    $controller->addProduct();
+                    break;
+                default:
+                    throw new Exception('不支持的请求方法');
+            }
+            break;
+            
+        // 单个产品管理
+        case (preg_match('/^admin\/products\/\d+$/', $resource) ? $resource : !$resource):
+            $controller = new ProductManagementController();
+            $id = (int)$uri[count($uri) - 1];
+            switch ($_SERVER['REQUEST_METHOD']) {
+                case 'GET':
+                    echo json_encode($controller->getProduct($id));
+                    break;
+                case 'PUT':
+                    $controller->updateProduct($id);
+                    break;
+                case 'DELETE':
+                    $controller->deleteProduct($id);
+                    break;
+                default:
+                    throw new Exception('不支持的请求方法');
+            }
+            break;
+            
+        // 登录由
+        case 'login':
+            $controller = new AuthController();
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                $controller->login();
+            }
+            break;
+            
+        // 购物车路由
         case 'cart':
-            if ($requestMethod === 'GET') {
-                if (isset($uri[2]) && $uri[2] === 'count') {
-                    $cartController->getCartCount();
-                } else {
-                    $cartController->getCart();
-                }
-            } else if ($requestMethod === 'POST') {
-                $cartController->addToCart();
+            $controller = new CartController();
+            switch ($_SERVER['REQUEST_METHOD']) {
+                case 'GET':
+                    $controller->getCart();
+                    break;
+                case 'POST':
+                    $controller->addToCart();
+                    break;
+                default:
+                    throw new Exception('不支持的请求方法');
             }
             break;
-            
+
+        // 购物车项目管理
+        case (preg_match('/^cart\/\d+$/', $resource) ? $resource : !$resource):
+            $controller = new CartController();
+            $id = (int)$uri[count($uri) - 1];
+            switch ($_SERVER['REQUEST_METHOD']) {
+                case 'PUT':
+                    $controller->updateCartItem($id);
+                    break;
+                case 'DELETE':
+                    $controller->removeFromCart($id);
+                    break;
+                default:
+                    throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        // 订单��由
         case 'orders':
-            if ($requestMethod === 'GET') {
-                $orderController->getOrders();
-            } else if ($requestMethod === 'POST') {
-                $orderController->createOrder();
+            $controller = new OrderController();
+            switch ($_SERVER['REQUEST_METHOD']) {
+                case 'GET':
+                    $controller->getOrders();
+                    break;
+                case 'POST':
+                    $controller->createOrder();
+                    break;
+                default:
+                    throw new Exception('不支持的请求方法');
             }
             break;
-            
-        case 'admin':
-            require_once './controllers/DashboardController.php';
-            require_once './controllers/EmployeeController.php';
-            require_once './controllers/ProductManagementController.php';
-            
-            $dashboardController = new DashboardController();
-            $employeeController = new EmployeeController();
-            $productManagementController = new ProductManagementController();
-            
-            if ($uri[2] === 'dashboard') {
-                $dashboardController->getDashboardStats();
-            } else if ($uri[2] === 'employees') {
-                if ($requestMethod === 'GET') {
-                    $employeeController->getEmployees();
-                } else if ($requestMethod === 'POST') {
-                    $employeeController->addEmployee();
-                } else if ($requestMethod === 'PUT' && isset($uri[3])) {
-                    $employeeController->updateEmployee($uri[3]);
-                } else if ($requestMethod === 'DELETE' && isset($uri[3])) {
-                    $employeeController->deleteEmployee($uri[3]);
-                }
-            } else if ($uri[2] === 'products') {
-                if ($requestMethod === 'GET') {
-                    $productManagementController->getProducts();
-                } else if ($requestMethod === 'POST') {
-                    if (isset($_POST['_method']) && $_POST['_method'] === 'PUT' && isset($uri[3])) {
-                        $productManagementController->updateProduct($uri[3]);
-                    } else {
-                        $productManagementController->addProduct();
-                    }
-                } else if ($requestMethod === 'DELETE' && isset($uri[3])) {
-                    $productManagementController->deleteProduct($uri[3]);
-                }
-            } else if ($uri[2] === 'orders') {
-                if ($requestMethod === 'GET') {
-                    $orderController->getOrders();
-                } else if ($requestMethod === 'POST' && $uri[3] === 'status') {
-                    $orderController->updateOrderStatus();
-                }
-            } else if ($uri[2] === 'inventory') {
-                if ($requestMethod === 'GET') {
-                    $productManagementController->getProducts();
-                } else if ($requestMethod === 'POST' && isset($uri[3]) && $uri[4] === 'stock') {
-                    $productManagementController->updateStock($uri[3]);
-                }
+
+        // 单个订单管理
+        case (preg_match('/^orders\/\d+$/', $resource) ? $resource : !$resource):
+            $controller = new OrderController();
+            $id = (int)$uri[count($uri) - 1];
+            switch ($_SERVER['REQUEST_METHOD']) {
+                case 'GET':
+                    $controller->getOrder($id);
+                    break;
+                case 'PUT':
+                    $controller->updateOrderStatus($id);
+                    break;
+                default:
+                    throw new Exception('不支持的请求方法');
             }
             break;
-            
+
+        // 供应商订单路由
+        case 'supplier/orders':
+            $controller = new SupplierController();
+            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                $controller->getSupplierOrders();
+            } else {
+                throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        // 供应商产品路由
+        case 'supplier/products':
+            $controller = new SupplierController();
+            switch ($_SERVER['REQUEST_METHOD']) {
+                case 'GET':
+                    $controller->getSupplierProducts();
+                    break;
+                case 'POST':
+                    $controller->addProduct();
+                    break;
+                default:
+                    throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        // 供应商单个产品管理
+        case (preg_match('/^supplier\/products\/\d+$/', $resource) ? $resource : !$resource):
+            $controller = new SupplierController();
+            $id = (int)end($uri);
+            switch ($_SERVER['REQUEST_METHOD']) {
+                case 'PUT':
+                    $controller->updateProduct($id);
+                    break;
+                case 'DELETE':
+                    $controller->deleteProduct($id);
+                    break;
+                default:
+                    throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        // 供应商仪表盘路由
+        case 'supplier/dashboard':
+            $controller = new SupplierController();
+            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                $controller->getDashboard();
+            } else {
+                throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        // 员工仪表盘路由
+        case 'employee/dashboard':
+            $controller = new EmployeeController();
+            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                $controller->getDashboard();
+            } else {
+                throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        // 员工库存管理路由
+        case 'employee/inventory':
+            $controller = new EmployeeController();
+            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                $controller->getInventory();
+            } else {
+                throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        // 管理员订单路由
+        case 'admin/orders':
+            $controller = new OrderController();
+            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                $controller->getAdminOrders();
+            } else {
+                throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        // 员工订单路由
+        case 'employee/orders':
+            $controller = new OrderController();
+            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                $controller->getEmployeeOrders();
+            } else {
+                throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        // 管理员路由
+        case 'admin/employees':
+            $controller = new EmployeeController();
+            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                $controller->getEmployees();
+            } else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                $controller->addEmployee();
+            } else {
+                throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        case (preg_match('/^admin\/employees\/\d+$/', $resource) ? $resource : !$resource):
+            $controller = new EmployeeController();
+            $id = (int)$uri[count($uri) - 1];
+            if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
+                $controller->updateEmployee($id);
+            } else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+                $controller->deleteEmployee($id);
+            } else {
+                throw new Exception('不支持的请求方法');
+            }
+            break;
+
         default:
             http_response_code(404);
             echo json_encode(['error' => '未找到路由']);
             break;
     }
+} catch (Exception $e) {
+    error_log('API Error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+    ]);
 } 

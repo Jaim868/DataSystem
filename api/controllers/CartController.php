@@ -5,39 +5,45 @@ class CartController {
     private $db;
 
     public function __construct() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
         $this->db = Database::getInstance()->getConnection();
     }
 
     public function getCart() {
         try {
-            $userId = $_GET['userId'] ?? null;
-            
+            $userId = $_SESSION['user_id'] ?? null;
             if (!$userId) {
-                http_response_code(401);
-                echo json_encode(['error' => '未授权']);
-                return;
+                throw new Exception('用户未登录');
             }
 
-            // 修改 SQL 查询，确保价格是数字类型
             $stmt = $this->db->prepare("
                 SELECT 
-                    c.id, 
-                    c.product_id, 
-                    p.name, 
-                    CAST(p.price AS FLOAT) as price, 
-                    c.quantity, 
-                    p.image_url
+                    c.id as cart_id,
+                    c.quantity,
+                    p.id as product_id,
+                    p.name,
+                    p.price,
+                    p.image_url,
+                    p.stock
                 FROM cart_items c
                 JOIN products p ON c.product_id = p.id
                 WHERE c.user_id = ?
             ");
             $stmt->execute([$userId]);
-            $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $cartItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            header('Content-Type: application/json');
-            echo json_encode($items);
-        } catch(PDOException $e) {
-            error_log('Get cart error: ' . $e->getMessage());
+            foreach ($cartItems as &$item) {
+                $item['price'] = (float)$item['price'];
+                $item['quantity'] = (int)$item['quantity'];
+            }
+
+            echo json_encode($cartItems);
+        } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['error' => $e->getMessage()]);
         }
@@ -45,53 +51,50 @@ class CartController {
 
     public function addToCart() {
         try {
-            $data = json_decode(file_get_contents('php://input'), true);
-            
-            if (!isset($data['product_id']) || !isset($data['quantity'])) {
-                http_response_code(400);
-                echo json_encode(['error' => '缺少必要参数']);
-                return;
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception('用户未登录');
             }
 
-            // 这里暂时使用固定用户ID，后续需要从登录状态获取
-            $userId = 2; // 假设这是默认用户ID
-            
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (!isset($data['product_id']) || !isset($data['quantity'])) {
+                throw new Exception('缺少必要参数');
+            }
+
             // 检查商品是否存在且有库存
             $stmt = $this->db->prepare("
-                SELECT stock FROM products 
-                WHERE id = ? AND deleted_at IS NULL
+                SELECT stock FROM products WHERE id = ?
             ");
             $stmt->execute([$data['product_id']]);
             $product = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$product) {
-                http_response_code(404);
-                echo json_encode(['error' => '商品不存在']);
-                return;
-            }
-            
-            if ($product['stock'] < $data['quantity']) {
-                http_response_code(400);
-                echo json_encode(['error' => '库存不足']);
-                return;
+                throw new Exception('商品不存在');
             }
 
-            // 检查购物车是否已有该商品
+            if ($product['stock'] < $data['quantity']) {
+                throw new Exception('商品库存不足');
+            }
+
+            // 检查购物车是否已有此商品
             $stmt = $this->db->prepare("
                 SELECT id, quantity FROM cart_items 
                 WHERE user_id = ? AND product_id = ?
             ");
             $stmt->execute([$userId, $data['product_id']]);
-            $cartItem = $stmt->fetch(PDO::FETCH_ASSOC);
+            $existingItem = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if ($cartItem) {
+            $this->db->beginTransaction();
+
+            if ($existingItem) {
                 // 更新数量
+                $newQuantity = $existingItem['quantity'] + $data['quantity'];
                 $stmt = $this->db->prepare("
                     UPDATE cart_items 
-                    SET quantity = quantity + ?
+                    SET quantity = ?
                     WHERE id = ?
                 ");
-                $stmt->execute([$data['quantity'], $cartItem['id']]);
+                $stmt->execute([$newQuantity, $existingItem['id']]);
             } else {
                 // 新增购物车项
                 $stmt = $this->db->prepare("
@@ -101,36 +104,58 @@ class CartController {
                 $stmt->execute([$userId, $data['product_id'], $data['quantity']]);
             }
 
-            echo json_encode(['message' => '添加成功']);
-        } catch(PDOException $e) {
-            error_log('Add to cart error: ' . $e->getMessage());
+            $this->db->commit();
+            echo json_encode(['success' => true, 'message' => '添加成功']);
+        } catch (Exception $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
             http_response_code(500);
-            echo json_encode(['error' => '添加到购物车失败']);
+            echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
-    public function getCartCount() {
+    public function updateCartItem($id) {
         try {
-            $userId = $_GET['userId'] ?? null;
-            
+            $userId = $_SESSION['user_id'] ?? null;
             if (!$userId) {
-                http_response_code(401);
-                echo json_encode(['error' => '未授权']);
-                return;
+                throw new Exception('用户未登录');
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (!isset($data['quantity'])) {
+                throw new Exception('缺少数量参数');
             }
 
             $stmt = $this->db->prepare("
-                SELECT COUNT(*) as count
-                FROM cart_items
-                WHERE user_id = ?
+                UPDATE cart_items 
+                SET quantity = ?, updated_at = NOW()
+                WHERE id = ? AND user_id = ?
             ");
-            $stmt->execute([$userId]);
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt->execute([$data['quantity'], $id, $userId]);
 
-            header('Content-Type: application/json');
-            echo json_encode(['count' => (int)$result['count']]);
-        } catch(PDOException $e) {
-            error_log('Get cart count error: ' . $e->getMessage());
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function removeFromCart($id) {
+        try {
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception('用户未登录');
+            }
+
+            $stmt = $this->db->prepare("
+                DELETE FROM cart_items 
+                WHERE id = ? AND user_id = ?
+            ");
+            $stmt->execute([$id, $userId]);
+
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['error' => $e->getMessage()]);
         }

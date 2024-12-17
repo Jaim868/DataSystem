@@ -1,40 +1,77 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Space, Popconfirm } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Table, Button, Modal, Form, Input, Select, message, Space, Tag, Card, Empty } from 'antd';
+import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
 interface Employee {
   id: number;
-  name: string;
-  position: string;
-  email: string;
-  phone: string;
+  username: string;
+  store_id: number;
+  store_name: string;
   hire_date: string;
+  salary: number;
+  position: string;
+  created_at: string;
+}
+
+interface Store {
+  id: number;
+  name: string;
 }
 
 const EmployeeManagement: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [form] = Form.useForm();
 
+  useEffect(() => {
+    fetchEmployees();
+    fetchStores();
+  }, []);
+
   const fetchEmployees = async () => {
     setLoading(true);
     try {
       const response = await axios.get('/api/admin/employees');
-      setEmployees(Array.isArray(response.data) ? response.data : []);
-    } catch (error) {
+      const { success, employees: employeeData, error } = response.data;
+
+      if (success && Array.isArray(employeeData)) {
+        setEmployees(employeeData);
+      } else {
+        console.error('获取员工失败:', error);
+        message.error(error || '获取员工数据失败');
+        setEmployees([]);
+      }
+    } catch (error: any) {
       console.error('获取员工列表失败:', error);
+      message.error(error.response?.data?.error || '获取员工列表失败');
       setEmployees([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchEmployees();
-  }, []);
+  const fetchStores = async () => {
+    try {
+      const response = await axios.get('/api/admin/stores');
+      const { success, stores: storeData, error } = response.data;
+
+      if (success && Array.isArray(storeData)) {
+        setStores(storeData);
+      } else {
+        console.error('获取商店失败:', error);
+        message.error(error || '获取商店数据失败');
+        setStores([]);
+      }
+    } catch (error: any) {
+      console.error('获取商店列表失败:', error);
+      message.error(error.response?.data?.error || '获取商店列表失败');
+      setStores([]);
+    }
+  };
 
   const handleSubmit = async (values: any) => {
     try {
@@ -48,26 +85,32 @@ const EmployeeManagement: React.FC = () => {
       setModalVisible(false);
       form.resetFields();
       fetchEmployees();
-    } catch (error) {
-      message.error('操作失败');
+    } catch (error: any) {
+      console.error('操作失败:', error);
+      message.error(error.response?.data?.error || '操作失败');
     }
   };
 
   const handleDelete = async (id: number) => {
     try {
-      await axios.delete(`/api/admin/employees/${id}`);
-      message.success('员工删除成功');
-      fetchEmployees();
-    } catch (error) {
-      message.error('删除失败');
+      const response = await axios.delete(`/api/admin/employees/${id}`);
+      if (response.data.success) {
+        message.success('员工删除成功');
+        fetchEmployees();
+      } else {
+        message.error(response.data.error || '删除失败');
+      }
+    } catch (error: any) {
+      console.error('删除失败:', error);
+      message.error(error.response?.data?.error || '删除失败');
     }
   };
 
-  const columns: ColumnsType<Employee> = [
+  const columns = [
     {
-      title: '姓名',
-      dataIndex: 'name',
-      key: 'name',
+      title: '用户名',
+      dataIndex: 'username',
+      key: 'username',
     },
     {
       title: '职位',
@@ -75,14 +118,15 @@ const EmployeeManagement: React.FC = () => {
       key: 'position',
     },
     {
-      title: '邮箱',
-      dataIndex: 'email',
-      key: 'email',
+      title: '所属商店',
+      dataIndex: 'store_name',
+      key: 'store_name',
     },
     {
-      title: '电话',
-      dataIndex: 'phone',
-      key: 'phone',
+      title: '薪资',
+      dataIndex: 'salary',
+      key: 'salary',
+      render: (salary: number) => `¥${salary.toFixed(2)}`,
     },
     {
       title: '入职日期',
@@ -91,12 +135,19 @@ const EmployeeManagement: React.FC = () => {
       render: (date: string) => new Date(date).toLocaleDateString(),
     },
     {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => new Date(date).toLocaleString(),
+    },
+    {
       title: '操作',
       key: 'action',
-      render: (_, record) => (
+      render: (_: any, record: Employee) => (
         <Space>
           <Button
-            type="link"
+            type="primary"
+            icon={<EditOutlined />}
             onClick={() => {
               setEditingEmployee(record);
               form.setFieldsValue(record);
@@ -105,48 +156,55 @@ const EmployeeManagement: React.FC = () => {
           >
             编辑
           </Button>
-          <Popconfirm
-            title="确定要删除这名员工吗？"
-            onConfirm={() => handleDelete(record.id)}
+          <Button
+            type="primary"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDelete(record.id)}
           >
-            <Button type="link" danger>
-              删除
-            </Button>
-          </Popconfirm>
+            删除
+          </Button>
         </Space>
       ),
     },
   ];
 
   return (
-    <div>
-      <Button
-        type="primary"
-        onClick={() => {
-          setEditingEmployee(null);
-          form.resetFields();
-          setModalVisible(true);
-        }}
-        style={{ marginBottom: 16 }}
+    <div style={{ padding: '24px' }}>
+      <Card
+        title="员工管理"
+        extra={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setEditingEmployee(null);
+              form.resetFields();
+              setModalVisible(true);
+            }}
+          >
+            添加员工
+          </Button>
+        }
       >
-        添加员工
-      </Button>
-
-      <Table
-        columns={columns}
-        dataSource={employees}
-        rowKey="id"
-        loading={loading}
-      />
+        {loading ? (
+          <Card loading={true} />
+        ) : employees.length === 0 ? (
+          <Empty description="暂无员工数据" />
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={employees}
+            rowKey="id"
+            pagination={{ pageSize: 10 }}
+          />
+        )}
+      </Card>
 
       <Modal
         title={editingEmployee ? '编辑员工' : '添加员工'}
         open={modalVisible}
-        onCancel={() => {
-          setModalVisible(false);
-          setEditingEmployee(null);
-          form.resetFields();
-        }}
+        onCancel={() => setModalVisible(false)}
         footer={null}
       >
         <Form
@@ -155,12 +213,23 @@ const EmployeeManagement: React.FC = () => {
           onFinish={handleSubmit}
         >
           <Form.Item
-            name="name"
-            label="姓名"
-            rules={[{ required: true, message: '请输入姓名' }]}
+            name="username"
+            label="用户名"
+            rules={[{ required: true, message: '请输入用户名' }]}
           >
             <Input />
           </Form.Item>
+
+          {!editingEmployee && (
+            <Form.Item
+              name="password"
+              label="密码"
+              rules={[{ required: true, message: '请输入密码' }]}
+            >
+              <Input.Password />
+            </Form.Item>
+          )}
+
           <Form.Item
             name="position"
             label="职位"
@@ -168,23 +237,29 @@ const EmployeeManagement: React.FC = () => {
           >
             <Input />
           </Form.Item>
+
           <Form.Item
-            name="email"
-            label="邮箱"
-            rules={[
-              { required: true, message: '请输入邮箱' },
-              { type: 'email', message: '请输入有效的邮箱地址' }
-            ]}
+            name="store_id"
+            label="所属商店"
+            rules={[{ required: true, message: '请选择所属商店' }]}
           >
-            <Input />
+            <Select>
+              {stores.map(store => (
+                <Select.Option key={store.id} value={store.id}>
+                  {store.name}
+                </Select.Option>
+              ))}
+            </Select>
           </Form.Item>
+
           <Form.Item
-            name="phone"
-            label="电话"
-            rules={[{ required: true, message: '请输入电话' }]}
+            name="salary"
+            label="薪资"
+            rules={[{ required: true, message: '请输入薪资' }]}
           >
-            <Input />
+            <Input type="number" prefix="¥" />
           </Form.Item>
+
           <Form.Item>
             <Button type="primary" htmlType="submit" block>
               {editingEmployee ? '更新' : '添加'}

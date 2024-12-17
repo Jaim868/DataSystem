@@ -5,92 +5,96 @@ class AuthController {
     private $db;
 
     public function __construct() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
         $this->db = Database::getInstance()->getConnection();
     }
 
     public function login() {
         try {
             $data = json_decode(file_get_contents('php://input'), true);
+            error_log('Login attempt with data: ' . print_r($data, true));
             
-            // 验证必要字段
-            if (!isset($data['username']) || !isset($data['password']) || !isset($data['userType'])) {
-                http_response_code(400);
-                echo json_encode(['error' => '缺少必要参数']);
-                return;
+            if (!isset($data['username']) || !isset($data['password']) || !isset($data['role'])) {
+                throw new Exception('缺少必要的登录信息');
             }
 
+            error_log("Attempting login for username: " . $data['username'] . " with role: " . $data['role']);
+            
+            // 先检查用户名和密码
             $stmt = $this->db->prepare("
-                SELECT id, username, role
+                SELECT id, username, role, password 
                 FROM users 
-                WHERE username = ? 
-                AND password = ? 
-                AND role = ?
-                AND deleted_at IS NULL
+                WHERE username = ?
             ");
-
-            $stmt->execute([
-                $data['username'],
-                md5($data['password']),
-                $data['userType'] === 'admin' ? 'admin' : 'customer'
-            ]);
-
+            $stmt->execute([$data['username']]);
             $user = $stmt->fetch();
-
-            if ($user) {
-                // 生成token
-                $token = bin2hex(random_bytes(32));
-                
-                // 更新用户token
-                $stmt = $this->db->prepare("
-                    UPDATE users 
-                    SET token = ?, 
-                        updated_at = NOW()
-                    WHERE id = ?
-                ");
-                $stmt->execute([$token, $user['id']]);
-
-                header('Content-Type: application/json');
-                echo json_encode([
-                    'success' => true,
-                    'token' => $token,
-                    'userId' => $user['id'],
-                    'role' => $user['role'],
-                    'username' => $user['username']
-                ]);
-            } else {
-                http_response_code(401);
+            
+            error_log("Database query result: " . print_r($user, true));
+            
+            if (!$user) {
+                error_log("User not found");
                 echo json_encode([
                     'success' => false,
                     'message' => '用户名或密码错误'
                 ]);
+                return;
             }
-        } catch(PDOException $e) {
+
+            // 验证密码
+            error_log("Comparing passwords - Input: " . $data['password'] . ", Stored: " . $user['password']);
+            if ($data['password'] !== $user['password']) {
+                error_log("Invalid password");
+                echo json_encode([
+                    'success' => false,
+                    'message' => '用户名或密码错误'
+                ]);
+                return;
+            }
+
+            // 验证角色
+            error_log("Comparing roles - Input: " . $data['role'] . ", User role: " . $user['role']);
+            if ($data['role'] !== $user['role']) {
+                error_log("Role mismatch. Expected: " . $user['role'] . ", Got: " . $data['role']);
+                echo json_encode([
+                    'success' => false,
+                    'message' => '所选角色与用户不匹配'
+                ]);
+                return;
+            }
+
+            // 登录成功
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['role'] = $user['role'];
+            
+            error_log("Login successful for user: " . $user['username'] . " with role: " . $user['role']);
+            
+            echo json_encode([
+                'success' => true,
+                'userId' => $user['id'],
+                'role' => $user['role'],
+                'username' => $user['username']
+            ]);
+            
+        } catch (Exception $e) {
+            error_log("Login error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
             http_response_code(500);
             echo json_encode([
                 'success' => false,
-                'message' => '服务器错误',
-                'error' => $e->getMessage()
+                'message' => $e->getMessage()
             ]);
         }
     }
 
     public function logout() {
         try {
-            $token = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-            if ($token) {
-                $token = str_replace('Bearer ', '', $token);
-                $stmt = $this->db->prepare("
-                    UPDATE users 
-                    SET token = NULL,
-                        updated_at = NOW()
-                    WHERE token = ?
-                ");
-                $stmt->execute([$token]);
-            }
-            
-            header('Content-Type: application/json');
+            session_destroy();
             echo json_encode(['success' => true]);
-        } catch(PDOException $e) {
+        } catch(Exception $e) {
             http_response_code(500);
             echo json_encode([
                 'success' => false,

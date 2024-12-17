@@ -1,48 +1,92 @@
 import React, { useState } from 'react';
-import { Card, Form, Input, Button, Radio, message } from 'antd';
+import { Form, Input, Button, Card, Radio, message, Typography } from 'antd';
+import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
+const { Title } = Typography;
+
+interface LoginForm {
+  username: string;
+  password: string;
+  role: 'customer' | 'supplier' | 'employee' | 'manager';
+}
+
 const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [userType, setUserType] = useState<'admin' | 'customer'>('customer');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
-  const handleLogin = async () => {
-    if (!username || !password) {
-      message.error('请输入用户名和密码');
-      return;
-    }
-
+  const handleSubmit = async (values: LoginForm) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const response = await axios.post('/api/login', {
-        username,
-        password
+      console.log('Attempting login with:', { ...values, password: '***' });
+      
+      const response = await axios.post('/api/login', values, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       });
+      
+      console.log('Raw response:', response);
+      console.log('Response data:', response.data);
+      
+      // 检查响应数据的格式
+      if (typeof response.data === 'string') {
+        try {
+          response.data = JSON.parse(response.data);
+        } catch (e) {
+          console.error('Failed to parse response as JSON:', e);
+          message.error('服务器响应格式错误');
+          return;
+        }
+      }
+      
+      const { success, role, userId, username } = response.data;
+      
+      if (success) {
+        // 存储用户信息
+        localStorage.setItem('userId', userId.toString());
+        localStorage.setItem('role', role);
+        localStorage.setItem('username', username);
 
-      if (response.data.success) {
-        localStorage.setItem('userId', response.data.userId);
-        localStorage.setItem('userRole', response.data.role);
-        
         message.success('登录成功');
+        console.log('Login successful, redirecting based on role:', role);
         
-        if (response.data.role === 'admin') {
-          navigate('/admin');
-        } else {
-          navigate('/customer');
+        // 根据角色跳转到不同的页面
+        switch (role) {
+          case 'customer':
+            navigate('/customer/home');
+            break;
+          case 'supplier':
+            navigate('/supplier/dashboard');
+            break;
+          case 'employee':
+            navigate('/employee/dashboard');
+            break;
+          case 'manager':
+            navigate('/admin/dashboard');
+            break;
+          default:
+            console.error('Unknown role:', role);
+            message.error('未知的用户角色');
         }
       } else {
+        console.error('Login failed:', response.data.message);
         message.error(response.data.message || '登录失败');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      if (axios.isAxiosError(error)) {
-        message.error(error.response?.data?.message || '登录失败');
+      
+      if (error.response) {
+        console.error('Error response:', error.response.data);
+        message.error(error.response.data.message || '登录失败，请检查用户名和密码');
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+        message.error('服务器无响应，请稍后重试');
       } else {
-        message.error('登录失败，请稍后重试');
+        console.error('Error details:', error.message);
+        message.error('登录请求失败，请稍后重试');
       }
     } finally {
       setLoading(false);
@@ -50,84 +94,61 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div style={{
-      width: '100vw',
+    <div style={{ 
       height: '100vh',
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      background: `url('/images/background.jpg')`,
-      backgroundSize: '100% 100%',
-      backgroundRepeat: 'no-repeat',
-      overflow: 'hidden'
+      background: '#f0f2f5'
     }}>
-      <Card
-        title={
-          <div style={{ textAlign: 'center' }}>
-            <h2 style={{ 
-              fontSize: '28px', 
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              color: '#fff',
-              textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
-            }}>
-              商城登录系统
-            </h2>
-            <Radio.Group
-              value={userType}
-              onChange={(e) => setUserType(e.target.value)}
-              style={{ marginBottom: '20px' }}
-              size="large"
-              buttonStyle="solid"
-            >
-              <Radio.Button value="customer">用户登录</Radio.Button>
-              <Radio.Button value="admin">商家登录</Radio.Button>
-            </Radio.Group>
-          </div>
-        }
-        styles={{
-          header: {
-            background: 'transparent',
-            border: 'none'
-          },
-          body: {
-            padding: '24px 32px'
-          }
-        }}
-        style={{
-          width: 400,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-          borderRadius: '16px',
-          background: 'rgba(255, 255, 255, 0.85)',
-          backdropFilter: 'blur(8px)',
-          border: '1px solid rgba(255,255,255,0.2)'
-        }}
-        bordered={false}
-      >
+      <Card style={{ width: 400, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+        <Title level={2} style={{ textAlign: 'center', marginBottom: 32 }}>
+          渔具商城登录
+        </Title>
         <Form
           name="login"
-          onFinish={handleLogin}
-          autoComplete="off"
-          size="large"
-          style={{ marginTop: '20px' }}
+          onFinish={handleSubmit}
+          initialValues={{ role: 'customer' }}
         >
           <Form.Item
+            name="role"
+            rules={[{ required: true, message: '请选择登录角色' }]}
+          >
+            <Radio.Group buttonStyle="solid" style={{ width: '100%', marginBottom: 16 }}>
+              <Radio.Button value="customer" style={{ width: '25%', textAlign: 'center' }}>
+                客户
+              </Radio.Button>
+              <Radio.Button value="supplier" style={{ width: '25%', textAlign: 'center' }}>
+                供应商
+              </Radio.Button>
+              <Radio.Button value="employee" style={{ width: '25%', textAlign: 'center' }}>
+                员工
+              </Radio.Button>
+              <Radio.Button value="manager" style={{ width: '25%', textAlign: 'center' }}>
+                管理员
+              </Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+
+          <Form.Item
             name="username"
-            rules={[{ required: true, message: '请输入用户名！' }]}
+            rules={[{ required: true, message: '请输入用户名' }]}
           >
             <Input 
-              placeholder={userType === 'admin' ? '请输入商家账号' : '请输入用户账号'}
-              onChange={(e) => setUsername(e.target.value)}
+              prefix={<UserOutlined />} 
+              placeholder="用户名" 
+              size="large"
             />
           </Form.Item>
 
           <Form.Item
             name="password"
-            rules={[{ required: true, message: '请输入密码！' }]}
+            rules={[{ required: true, message: '请输入密码' }]}
           >
-            <Input.Password 
-              placeholder="请输入密码"
-              onChange={(e) => setPassword(e.target.value)}
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder="密码"
+              size="large"
             />
           </Form.Item>
 
@@ -135,42 +156,13 @@ const Login: React.FC = () => {
             <Button 
               type="primary" 
               htmlType="submit" 
-              style={{ 
-                width: '100%',
-                height: '45px',
-                fontSize: '16px',
-                borderRadius: '8px',
-                background: '#1890ff',
-                boxShadow: '0 4px 12px rgba(24,144,255,0.3)'
-              }}
               loading={loading}
+              block
+              size="large"
             >
               登录
             </Button>
           </Form.Item>
-
-          <div style={{ 
-            textAlign: 'center', 
-            color: '#666',
-            background: 'rgba(0,0,0,0.03)',
-            padding: '15px',
-            borderRadius: '8px',
-            marginTop: '20px',
-            border: '1px solid rgba(0,0,0,0.06)'
-          }}>
-            <div style={{ 
-              fontWeight: 'bold', 
-              marginBottom: '10px',
-              color: '#333'
-            }}>
-              测试账号
-            </div>
-            {userType === 'admin' ? (
-              <p style={{ margin: 0 }}>商家账号：admin<br/>密码：admin</p>
-            ) : (
-              <p style={{ margin: 0 }}>用户账号：user<br/>密码：user</p>
-            )}
-          </div>
         </Form>
       </Card>
     </div>

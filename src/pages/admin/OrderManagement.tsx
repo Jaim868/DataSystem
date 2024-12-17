@@ -1,76 +1,60 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Tag, Button, message } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Table, Tag, Space, Button, message } from 'antd';
 import axios from 'axios';
 
-interface OrderItem {
-  id: number;
-  name: string;
-  price: number;
-  quantity: number;
-}
-
 interface Order {
+  id: number;
   order_no: string;
+  customer_name: string;
   total_amount: number;
-  status: 'pending' | 'shipped';
+  status: string;
   created_at: string;
-  items: OrderItem[];
 }
 
 const OrderManagement: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
   const fetchOrders = async () => {
     setLoading(true);
     try {
       const response = await axios.get('/api/admin/orders');
-      setOrders(Array.isArray(response.data) ? response.data : []);
+      setOrders(response.data);
     } catch (error) {
-      console.error('获取订单列表失败:', error);
-      setOrders([]);
+      message.error('获取订单列表失败');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleShip = async (orderNo: string) => {
-    try {
-      await axios.post('/api/admin/orders/status', {
-        orderNo,
-        status: 'shipped'
-      });
-      message.success('订单已发货');
-      fetchOrders();
-    } catch (error) {
-      message.error('发货失败');
-    }
-  };
-
-  useEffect(() => {
-    fetchOrders();
-  }, []);
-
-  const columns: ColumnsType<Order> = [
+  const columns = [
     {
-      title: '订单号',
+      title: '订单编号',
       dataIndex: 'order_no',
       key: 'order_no',
     },
     {
-      title: '总金额',
+      title: '客户名称',
+      dataIndex: 'customer_name',
+      key: 'customer_name',
+    },
+    {
+      title: '订单金额',
       dataIndex: 'total_amount',
       key: 'total_amount',
       render: (amount: number) => `¥${amount.toFixed(2)}`,
     },
     {
-      title: '状态',
+      title: '订单状态',
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
-        <Tag color={status === 'pending' ? 'gold' : 'green'}>
-          {status === 'pending' ? '待发货' : '已发货'}
+        <Tag color={status === 'completed' ? 'green' : 'gold'}>
+          {status === 'completed' ? '已完成' : '处理中'}
         </Tag>
       ),
     },
@@ -80,48 +64,15 @@ const OrderManagement: React.FC = () => {
       key: 'created_at',
       render: (date: string) => new Date(date).toLocaleString(),
     },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_, record) => (
-        record.status === 'pending' && (
-          <Button 
-            type="primary"
-            onClick={() => handleShip(record.order_no)}
-          >
-            发货
-          </Button>
-        )
-      ),
-    },
   ];
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div>
       <Table
         columns={columns}
-        dataSource={orders || []}
-        rowKey="order_no"
+        dataSource={orders}
+        rowKey="id"
         loading={loading}
-        expandable={{
-          expandedRowRender: (record) => (
-            <Table
-              columns={[
-                { title: '商品名称', dataIndex: 'name' },
-                { title: '单价', dataIndex: 'price', render: (price: number) => `¥${price.toFixed(2)}` },
-                { title: '数量', dataIndex: 'quantity' },
-                { 
-                  title: '小计', 
-                  dataIndex: 'subtotal',
-                  render: (_, record: OrderItem) => `¥${(record.price * record.quantity).toFixed(2)}`
-                },
-              ]}
-              dataSource={record.items}
-              pagination={false}
-              rowKey="id"
-            />
-          ),
-        }}
       />
     </div>
   );

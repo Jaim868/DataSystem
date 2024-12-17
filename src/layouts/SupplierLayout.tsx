@@ -1,11 +1,11 @@
 import React from 'react';
 import { Layout, Menu } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { HomeOutlined, ShoppingCartOutlined, OrderedListOutlined, LogoutOutlined } from '@ant-design/icons';
+import { DashboardOutlined, ShopOutlined, OrderedListOutlined, LogoutOutlined } from '@ant-design/icons';
 
-const { Header, Content } = Layout;
+const { Header, Sider, Content } = Layout;
 
-const CustomerLayout: React.FC = () => {
+const SupplierLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -16,19 +16,19 @@ const CustomerLayout: React.FC = () => {
 
   const menuItems = [
     {
-      key: '/customer/home',
-      icon: <HomeOutlined />,
-      label: '首页'
+      key: '/supplier/dashboard',
+      icon: <DashboardOutlined />,
+      label: '供应商主页'
     },
     {
-      key: '/customer/cart',
-      icon: <ShoppingCartOutlined />,
-      label: '购物车'
+      key: '/supplier/products',
+      icon: <ShopOutlined />,
+      label: '商品管理'
     },
     {
-      key: '/customer/orders',
+      key: '/supplier/orders',
       icon: <OrderedListOutlined />,
-      label: '我的订单'
+      label: '订单管理'
     },
     {
       key: 'logout',
@@ -40,9 +40,10 @@ const CustomerLayout: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ background: '#fff', padding: 0 }}>
+      <Sider theme="light" width={200}>
+        <div style={{ height: 32, margin: 16, background: 'rgba(0, 0, 0, 0.2)' }} />
         <Menu
-          mode="horizontal"
+          mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
           onClick={({ key }) => {
@@ -52,14 +53,16 @@ const CustomerLayout: React.FC = () => {
               navigate(key);
             }
           }}
-          style={{ justifyContent: 'flex-end' }}
         />
-      </Header>
-      <Content style={{ padding: '24px', background: '#fff' }}>
-        <Outlet />
-      </Content>
+      </Sider>
+      <Layout>
+        <Header style={{ background: '#fff', padding: 0 }} />
+        <Content style={{ margin: '24px 16px', padding: 24, background: '#fff' }}>
+          <Outlet />
+        </Content>
+      </Layout>
     </Layout>
   );
 };
 
-export default CustomerLayout; 
+export default SupplierLayout; 

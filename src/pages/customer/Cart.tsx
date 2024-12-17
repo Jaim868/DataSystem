@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, InputNumber, Card, Space, Modal, message } from 'antd';
+import { Table, Button, InputNumber, Card, Space, Modal, message, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -32,10 +32,20 @@ const Cart: React.FC = () => {
       }
 
       const response = await axios.get(`/api/cart?userId=${userId}`);
-      setCartItems(response.data);
-    } catch (error) {
-      message.error('获取购物车数据失败');
-      console.error(error);
+      
+      if (response.data && Array.isArray(response.data)) {
+        setCartItems(response.data);
+      } else if (response.data.error) {
+        message.error(response.data.error);
+        setCartItems([]);
+      } else {
+        message.error('获取购物车数据格式错误');
+        setCartItems([]);
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.error || '获取购物车数据失败');
+      console.error('获取购物车数据失败:', error);
+      setCartItems([]);
     } finally {
       setLoading(false);
     }
@@ -141,23 +151,36 @@ const Cart: React.FC = () => {
     },
   ];
 
-  const totalAmount = cartItems.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
+  const totalAmount = cartItems && cartItems.length > 0 
+    ? cartItems.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
+    : 0;
 
   return (
     <div>
-      <Table columns={columns} dataSource={cartItems} rowKey="id" />
-      <Card style={{ marginTop: 16 }}>
-        <Space>
-          <span>总计: ¥{totalAmount.toFixed(2)}</span>
-          <Button 
-            type="primary" 
-            onClick={handleCheckout}
-            disabled={cartItems.length === 0}
-          >
-            结算
-          </Button>
-        </Space>
-      </Card>
+      {loading ? (
+        <Card loading={true} />
+      ) : cartItems.length === 0 ? (
+        <Card>
+          <Empty description="购物车是空的" />
+        </Card>
+      ) : (
+        <>
+          <Table columns={columns} dataSource={cartItems} rowKey="id" />
+          <Card style={{ marginTop: 16 }}>
+            <Space>
+              <span>总计: ¥{totalAmount.toFixed(2)}</span>
+              <Button 
+                type="primary" 
+                onClick={() => setIsModalOpen(true)}
+                disabled={cartItems.length === 0}
+              >
+                结算
+              </Button>
+            </Space>
+          </Card>
+        </>
+      )}
+      
       <Modal
         title="确认订单"
         open={isModalOpen}
@@ -170,7 +193,6 @@ const Cart: React.FC = () => {
           <h3>订单信息确认</h3>
           <p>商品总数：{cartItems.length}</p>
           <p>总金额：¥{totalAmount.toFixed(2)}</p>
-          {/* 可以添加更多订单信息 */}
         </div>
       </Modal>
     </div>
