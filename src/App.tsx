@@ -80,6 +80,7 @@ const App: React.FC = () => {
           <Route path="orders" element={<OrderManagement />} />
           <Route path="employees" element={<EmployeeManagement />} />
           <Route path="stores" element={<StoreManagement />} />
+          <Route path="inventory" element={<InventoryManagement />} />
         </Route>
 
         <Route path="/unauthorized" element={<Unauthorized />} />
