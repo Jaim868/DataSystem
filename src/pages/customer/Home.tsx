@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Row, Col, Card, Spin, Typography, Carousel, Divider, Tag, Rate, message, Input, Select, Space } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -21,6 +21,22 @@ interface Product {
   store_name: string;
 }
 
+// 新增分类接口定义
+interface BaseCategory {
+  name: string;
+  icon: React.ReactNode;
+}
+
+interface SingleCategory extends BaseCategory {
+  category: string;
+}
+
+interface MultiCategory extends BaseCategory {
+  categories: string[];
+}
+
+type CategoryType = SingleCategory | MultiCategory;
+
 const Home: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,29 +46,29 @@ const Home: React.FC = () => {
   const [stores, setStores] = useState<{ id: number; name: string; }[]>([]);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchProducts();
-    fetchStores();
-  }, [selectedStore]);
+  // 修改分类定义，添加类型注解
+  const categories: CategoryType[] = useMemo(() => [
+    { name: '鱼竿', icon: <CrownOutlined />, category: '鱼竿' },
+    { name: '渔具', icon: <ShopOutlined />, categories: ['渔线', '鱼钩', '工具'] },
+    { name: '饵料', icon: <FireOutlined />, category: '饵料' },
+    { name: '服饰', icon: <SearchOutlined />, category: '服饰' }
+  ], []);
 
+  // 获取商品列表
   const fetchProducts = async () => {
+    setLoading(true);
     try {
-      const url = selectedStore 
-        ? `/api/products?store_id=${selectedStore}`
-        : '/api/products';
-      console.log('Fetching products from:', url);
-      const response = await axios.get(url);
-      console.log('Response data:', response.data);
+      let url = '/api/products';
+      if (selectedStore) {
+        url += `?store_id=${selectedStore}`;
+      }
       
-      if (response.data && Array.isArray(response.data)) {
-        console.log('Setting products array:', response.data);
+      const response = await axios.get(url);
+      if (Array.isArray(response.data)) {
         setProducts(response.data);
       } else if (response.data.data && Array.isArray(response.data.data)) {
-        console.log('Setting products from data property:', response.data.data);
         setProducts(response.data.data);
       } else {
-        console.error('Invalid products data structure:', response.data);
-        message.error('获取商品数据格式错误');
         setProducts([]);
       }
     } catch (error) {
@@ -64,50 +80,96 @@ const Home: React.FC = () => {
     }
   };
 
+  // 获取商店列表
   const fetchStores = async () => {
     try {
       const response = await axios.get('/api/stores');
       if (Array.isArray(response.data)) {
         setStores(response.data);
       } else {
-        console.error('Invalid stores data:', response.data);
+        setStores([]);
         message.error('获取商店列表失败');
       }
     } catch (error) {
       console.error('Error fetching stores:', error);
       message.error('获取商店列表失败');
+      setStores([]);
     }
   };
 
+  // 初始化数据
+  useEffect(() => {
+    fetchStores();
+  }, []);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [selectedStore]);
+
+  // 处理搜索
   const handleSearch = (value: string) => {
     setSearchText(value);
+    if (value.trim()) {
+      // 如果有搜索内容，过滤商品
+      const searchLower = value.toLowerCase().trim();
+      const searchResults = products.filter(product => {
+        const nameMatch = product.name.toLowerCase().includes(searchLower);
+        const descriptionMatch = product.description.toLowerCase().includes(searchLower);
+        return nameMatch || descriptionMatch;
+      });
+      setProducts(searchResults);
+    } else {
+      // 如果搜索框清空，重新获取所有商品
+      fetchProducts();
+    }
+    setSelectedCategory('');
   };
 
+  // 处理分类选择
   const handleCategoryClick = (category: string) => {
-    setSelectedCategory(category === selectedCategory ? '' : category);
+    if (category === selectedCategory) {
+      setSelectedCategory('');
+    } else {
+      setSelectedCategory(category);
+      setSearchText('');
+    }
   };
 
+  // 处理商店选择
   const handleStoreChange = (value: number | null) => {
     setSelectedStore(value);
+    setSearchText('');
+    setSelectedCategory('');
   };
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = !searchText || 
-      (product.name && product.name.toLowerCase().includes(searchText.toLowerCase())) ||
-      (product.description && product.description.toLowerCase().includes(searchText.toLowerCase()));
+  // 使用 useMemo 优化筛选逻辑
+  const filteredProducts = useMemo(() => {
+    if (loading) return [];
     
-    const matchesCategory = !selectedCategory || product.category === selectedCategory;
-    
-    return matchesSearch && matchesCategory;
-  });
+    let filtered = [...products];
 
-  const categories = [
-    { name: '鱼竿', icon: <CrownOutlined /> },
-    { name: '鱼线', icon: <FireOutlined /> },
-    { name: '鱼饵', icon: <ShopOutlined /> },
-    { name: '浮漂', icon: <SearchOutlined /> }
-  ];
+    // 分类过滤
+    if (selectedCategory) {
+      const category = categories.find(cat => cat.name === selectedCategory);
+      if (category) {
+        if ('categories' in category && category.categories) {
+          // 如果是渔具分类，检查是否在子分类列表中
+          filtered = filtered.filter(product => 
+            category.categories.includes(product.category || '')
+          );
+        } else if ('category' in category) {
+          // 其他分类直接比较
+          filtered = filtered.filter(product => 
+            product.category === category.category
+          );
+        }
+      }
+    }
 
+    return filtered;
+  }, [products, selectedCategory, loading, categories]);
+
+  // 渲染商店选择器
   const renderStoreSelector = () => (
     <Card style={{ marginBottom: 24 }}>
       <Space>
@@ -127,6 +189,7 @@ const Home: React.FC = () => {
     </Card>
   );
 
+  // 渲染商品列表
   const renderProductList = () => (
     <Row gutter={[24, 24]}>
       {loading ? (
@@ -149,14 +212,16 @@ const Home: React.FC = () => {
                 title={product.name}
                 description={
                   <>
-                    <Text type="secondary">{product.description}</Text>
+                    <Text type="secondary" ellipsis>{product.description}</Text>
                     <div style={{ marginTop: 8 }}>
                       <Rate disabled defaultValue={product.rating} style={{ fontSize: 12 }} />
                     </div>
                     <div style={{ marginTop: 8 }}>
                       <Tag color="blue">{product.store_name}</Tag>
-                      <Tag color="green">¥{product.price}</Tag>
-                      <Tag color="orange">库存: {product.stock}</Tag>
+                      <Tag color="green">¥{product.price.toFixed(2)}</Tag>
+                      <Tag color={product.stock > 0 ? 'orange' : 'red'}>
+                        {product.stock > 0 ? `库存: ${product.stock}` : '缺货'}
+                      </Tag>
                     </div>
                   </>
                 }
@@ -173,7 +238,10 @@ const Home: React.FC = () => {
       <Card style={{ marginBottom: 24 }}>
         <Search
           placeholder="搜索商品"
+          value={searchText}
           onSearch={handleSearch}
+          onChange={(e) => handleSearch(e.target.value)}
+          allowClear
           style={{ maxWidth: 400, marginBottom: 24 }}
         />
         <Divider />
@@ -186,12 +254,20 @@ const Home: React.FC = () => {
                   cursor: 'pointer',
                   padding: '12px',
                   background: selectedCategory === category.name ? '#e6f7ff' : 'transparent',
-                  borderRadius: '4px'
+                  borderRadius: '4px',
+                  transition: 'all 0.3s'
                 }}
                 onClick={() => handleCategoryClick(category.name)}
               >
-                {category.icon}
-                <div style={{ marginTop: '8px' }}>{category.name}</div>
+                <div style={{ fontSize: '24px', marginBottom: '8px' }}>
+                  {category.icon}
+                </div>
+                <div style={{ 
+                  fontSize: '16px',
+                  fontWeight: selectedCategory === category.name ? 'bold' : 'normal'
+                }}>
+                  {category.name}
+                </div>
               </div>
             </Col>
           ))}

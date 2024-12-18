@@ -133,43 +133,46 @@ const ProductDetail: React.FC = () => {
 
   return (
     <div className="product-detail" style={{ 
-      padding: '24px 3%',  // 减小边距，使用百分比
-      maxWidth: '100%',    // 允许内容填充整个屏幕
-      margin: '0 auto',
+      padding: '0',  // 移除内边距
+      maxWidth: '100%',
+      margin: '0',
       minHeight: '100vh',
-      background: '#f5f5f5'
+      background: '#f5f5f5',
+      display: 'flex',
+      flexDirection: 'column'
     }}>
-      {/* 标题区域 - 减小间距 */}
+      {/* 标题区域 */}
       <div style={{ 
-        textAlign: 'center', 
-        marginBottom: '24px',
-        padding: '0 5%'
+        padding: '24px 5%',
+        background: '#fff',
+        marginBottom: '24px'
       }}>
         <Title level={1} style={{ 
-          fontSize: 'min(36px, calc(24px + 1vw))',  // 限制最大字体大小
-          marginBottom: '12px'
+          fontSize: 'min(36px, calc(24px + 1vw))',
+          marginBottom: '12px',
+          textAlign: 'center'
         }}>
           {product.name}
         </Title>
         <Text type="secondary" style={{ 
           fontSize: 'min(16px, calc(14px + 0.2vw))',
-          maxWidth: '100%',  // 允许文字填充容器
-          display: 'inline-block',
+          display: 'block',
+          textAlign: 'center',
+          maxWidth: '800px',
+          margin: '0 auto',
           lineHeight: '1.6'
         }}>
           {product.description}
         </Text>
       </div>
 
-      {/* 主要内容区域 - 调整间距和比例 */}
-      <Row gutter={[24, 24]} style={{ margin: '0' }}>  {/* 减小栅格间距，移除外边距 */}
-        {/* 左侧商品图片 */}
-        <Col xs={24} md={12} style={{ padding: '12px' }}>  {/* 减小内边距 */}
+      {/* 主要内容区域 */}
+      <Row gutter={[24, 24]} style={{ margin: '0', flex: 1 }}>
+        {/* 左侧商品图片和详情 */}
+        <Col xs={24} md={14} lg={16} style={{ padding: '0 12px' }}>
           <div style={{ 
             background: '#fff',
-            padding: '16px',
-            borderRadius: '8px',
-            marginBottom: '16px'
+            marginBottom: '24px'
           }}>
             <img 
               src={product.image_url} 
@@ -177,37 +180,29 @@ const ProductDetail: React.FC = () => {
               style={{ 
                 width: '100%',
                 height: 'auto',
-                maxHeight: 'min(600px, calc(300px + 20vw))',  // 更灵活的高度调整
+                maxHeight: '70vh',
                 objectFit: 'contain'
               }} 
             />
           </div>
-          
+
           {/* 商品详情标签页 */}
           <div style={{ 
             background: '#fff',
-            padding: '16px',
-            borderRadius: '8px'
+            padding: '24px'
           }}>
-            <Tabs defaultActiveKey="1" size="large">  {/* 增大标签页大小 */}
+            <Tabs defaultActiveKey="1" size="large" className="product-detail-tabs">
               <TabPane tab="商品详情" key="1">
-                <div style={{ padding: '16px' }}>
-                  <Title level={4} style={{ fontSize: 'min(20px, calc(16px + 0.3vw))' }}>
-                    产品描述
-                  </Title>
-                  <Paragraph style={{ fontSize: 'min(16px, calc(14px + 0.2vw))' }}>
+                <div style={{ padding: '16px 0' }}>
+                  <Title level={4}>产品描述</Title>
+                  <Paragraph>
                     {product.description}
                   </Paragraph>
                   
                   <Divider />
                   
-                  <Title level={4} style={{ fontSize: 'min(20px, calc(16px + 0.3vw))' }}>
-                    规格参数
-                  </Title>
-                  <ul style={{ 
-                    paddingLeft: '20px',
-                    fontSize: 'min(16px, calc(14px + 0.2vw))'
-                  }}>
+                  <Title level={4}>规格参数</Title>
+                  <ul className="product-detail-features">
                     <li>类别：{product.category}</li>
                     {product.features?.map((feature, index) => (
                       <li key={index}>{feature}</li>
@@ -216,7 +211,7 @@ const ProductDetail: React.FC = () => {
                 </div>
               </TabPane>
               <TabPane tab="评价" key="2">
-                <div style={{ padding: '16px' }}>
+                <div style={{ padding: '16px 0' }}>
                   <Text>暂无评价</Text>
                 </div>
               </TabPane>
@@ -225,39 +220,33 @@ const ProductDetail: React.FC = () => {
         </Col>
 
         {/* 右侧商品信息 */}
-        <Col xs={24} md={12} style={{ padding: '12px' }}>
+        <Col xs={24} md={10} lg={8} style={{ padding: '0 12px' }}>
           <div style={{ 
             background: '#fff',
             padding: '24px',
-            borderRadius: '8px',
             position: 'sticky',
-            top: '24px',
-            height: 'fit-content'  // 适应内容高度
+            top: '24px'
           }}>
             <div style={{ marginBottom: '20px' }}>
               <Space size="large">
-                <ShopOutlined style={{ fontSize: 'min(24px, calc(18px + 0.3vw))' }} />
-                <Text strong style={{ fontSize: 'min(18px, calc(16px + 0.2vw))' }}>
+                <ShopOutlined style={{ fontSize: '24px' }} />
+                <Text strong style={{ fontSize: '18px' }}>
                   {product.store_name}
                 </Text>
               </Space>
             </div>
 
-            {/* 调整价格显示 */}
-            <div className="product-price" style={{ 
-              marginBottom: '24px',
-              fontSize: 'min(32px, calc(24px + 0.5vw))'  // 更大的价格字体
-            }}>
+            <div className="product-price" style={{ marginBottom: '24px' }}>
               {renderPrice()}
             </div>
 
-            <Divider />
+            <Divider style={{ margin: '16px 0' }} />
 
             <div style={{ marginBottom: '24px' }}>
               <Text strong style={{ 
                 display: 'block', 
                 marginBottom: '12px',
-                fontSize: 'min(18px, calc(16px + 0.2vw))'
+                fontSize: '16px'
               }}>
                 数量
               </Text>
@@ -267,15 +256,10 @@ const ProductDetail: React.FC = () => {
                   max={product.stock}
                   value={quantity}
                   onChange={(value) => setQuantity(value || 1)}
-                  style={{ 
-                    width: 'min(150px, calc(120px + 2vw))',
-                    height: '40px'
-                  }}
+                  style={{ width: '120px' }}
                   size="large"
                 />
-                <Text type="secondary" style={{ 
-                  fontSize: 'min(16px, calc(14px + 0.2vw))'
-                }}>
+                <Text type="secondary">
                   库存: {product.stock}
                 </Text>
               </Space>
@@ -289,11 +273,7 @@ const ProductDetail: React.FC = () => {
               loading={addingToCart}
               disabled={loading || !product}
               block
-              style={{ 
-                height: '48px',
-                fontSize: 'min(18px, calc(16px + 0.2vw))',
-                marginBottom: '24px'
-              }}
+              className="buy-button"
             >
               {product.stock <= 0 ? '暂时缺货' : '加入购物车'}
             </Button>
@@ -303,15 +283,16 @@ const ProductDetail: React.FC = () => {
               justifyContent: 'space-around',
               background: '#f8f8f8',
               padding: '16px',
-              borderRadius: '8px'
+              borderRadius: '8px',
+              marginTop: '24px'
             }}>
               <Space size="large">
-                <Text type="secondary" style={{ fontSize: 'min(16px, calc(14px + 0.2vw))' }}>
+                <Text type="secondary">
                   销量: <Text strong>{product.sales}</Text>
                 </Text>
               </Space>
               <Space size="large">
-                <Text type="secondary" style={{ fontSize: 'min(16px, calc(14px + 0.2vw))' }}>
+                <Text type="secondary">
                   评分: <Text strong>{product.rating}分</Text>
                 </Text>
               </Space>

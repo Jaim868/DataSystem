@@ -95,24 +95,20 @@ class ProductController {
         try {
             $stmt = $this->db->prepare("
                 SELECT 
-                    p.id,
-                    p.name,
-                    p.price,
-                    p.description,
-                    p.category,
-                    p.image_url,
-                    p.stock,
-                    p.rating,
+                    p.*,
+                    si.quantity as store_quantity,
                     s.id as store_id,
                     s.name as store_name,
                     sp.supplier_id,
-                    sup.name as supplier_name
+                    sup.company_name as supplier_name,
+                    sup.contact_name as supplier_contact
                 FROM products p
                 LEFT JOIN store_inventory si ON p.id = si.product_id
                 LEFT JOIN stores s ON si.store_id = s.id
                 LEFT JOIN supplier_products sp ON p.id = sp.product_id
                 LEFT JOIN suppliers sup ON sp.supplier_id = sup.id
                 WHERE p.id = ? AND p.deleted_at IS NULL
+                LIMIT 1
             ");
             $stmt->execute([$id]);
             $product = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -121,6 +117,9 @@ class ProductController {
                 throw new Exception("商品不存在");
             }
             
+            // 处理库存数量
+            $stock = $product['store_quantity'] ?? $product['stock'] ?? 0;
+            
             return [
                 'id' => (int)$product['id'],
                 'name' => $product['name'],
@@ -128,14 +127,17 @@ class ProductController {
                 'description' => $product['description'],
                 'category' => $product['category'],
                 'image_url' => $product['image_url'],
-                'stock' => (int)$product['stock'],
+                'stock' => (int)$stock,
                 'rating' => (float)$product['rating'],
+                'sales' => (int)$product['sales'],
                 'store_id' => $product['store_id'] ? (int)$product['store_id'] : null,
                 'store_name' => $product['store_name'],
                 'supplier_id' => $product['supplier_id'] ? (int)$product['supplier_id'] : null,
-                'supplier_name' => $product['supplier_name']
+                'supplier_name' => $product['supplier_name'],
+                'supplier_contact' => $product['supplier_contact']
             ];
         } catch (Exception $e) {
+            error_log("Product detail error: " . $e->getMessage());
             throw new Exception("获取商品详情失败: " . $e->getMessage());
         }
     }
