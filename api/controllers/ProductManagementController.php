@@ -8,6 +8,59 @@ class ProductManagementController {
         $this->db = Database::getInstance()->getConnection();
     }
 
+    public function getAll() {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT 
+                    id, 
+                    name, 
+                    CAST(price AS FLOAT) as price, 
+                    description, 
+                    category,
+                    image_url, 
+                    stock,
+                    sales,
+                    rating,
+                    created_at,
+                    updated_at
+                FROM products
+                WHERE deleted_at IS NULL
+                ORDER BY created_at DESC
+            ");
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch(PDOException $e) {
+            error_log('Get products error: ' . $e->getMessage());
+            http_response_code(500);
+            throw new Exception('获取商品列表失败');
+        }
+    }
+
+    private function checkManagerAuth() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        $userId = $_SESSION['user_id'] ?? null;
+        if (!$userId) {
+            throw new Exception('用户未登录');
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT role 
+            FROM users 
+            WHERE id = ? AND role = 'manager'
+        ");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+
+        if (!$user) {
+            throw new Exception('非管理员用户');
+        }
+
+        return $userId;
+    }
+
     public function getProducts() {
         try {
             $stmt = $this->db->prepare("
@@ -109,7 +162,7 @@ class ProductManagementController {
             }
             
             if (empty($updateFields)) {
-                throw new Exception('没有需要更新的字段');
+                throw new Exception('没有要更新的字段');
             }
 
             // 添加更新时间
@@ -188,5 +241,69 @@ class ProductManagementController {
         }
 
         return null;
+    }
+
+    public function getInventory() {
+        try {
+            // 验证管理员权限
+            $this->checkManagerAuth();
+
+            // 获取所有商店的库存信息
+            $stmt = $this->db->prepare("
+                SELECT 
+                    p.id,
+                    p.name,
+                    p.description,
+                    CAST(p.price AS DECIMAL(10,2)) as price,
+                    p.category,
+                    p.stock as total_stock,
+                    GROUP_CONCAT(CONCAT(s.name, ':', si.quantity) SEPARATOR ';') as store_stocks
+                FROM products p
+                LEFT JOIN store_inventory si ON p.id = si.product_id
+                LEFT JOIN stores s ON si.store_id = s.id
+                WHERE p.deleted_at IS NULL
+                GROUP BY p.id, p.name, p.description, p.price, p.category, p.stock
+                ORDER BY p.category, p.name
+            ");
+            
+            $stmt->execute();
+            $inventory = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 处理数据格式
+            $formattedInventory = array_map(function($item) {
+                // 处理每个商店的库存
+                $storeStocks = [];
+                if ($item['store_stocks']) {
+                    foreach (explode(';', $item['store_stocks']) as $storeStock) {
+                        if ($storeStock) {
+                            list($storeName, $quantity) = explode(':', $storeStock);
+                            $storeStocks[$storeName] = (int)$quantity;
+                        }
+                    }
+                }
+
+                return [
+                    'key' => $item['id'],
+                    'id' => (int)$item['id'],
+                    'name' => $item['name'],
+                    'description' => $item['description'],
+                    'price' => (float)$item['price'],
+                    'category' => $item['category'],
+                    'total_stock' => (int)$item['total_stock'],
+                    'store_stocks' => $storeStocks
+                ];
+            }, $inventory);
+
+            echo json_encode([
+                'success' => true,
+                'data' => $formattedInventory
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 } 

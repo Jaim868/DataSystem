@@ -8,128 +8,85 @@ class EmployeeController {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
-        while (ob_get_level()) {
-            ob_end_clean();
-        }
         $this->db = Database::getInstance()->getConnection();
     }
 
-    public function getEmployees() {
-        try {
-            $userId = $_SESSION['user_id'] ?? null;
-            if (!$userId) {
-                throw new Exception('用户未登录');
-            }
-
-            // 验证用户是否是管理员
-            $stmt = $this->db->prepare("
-                SELECT role FROM users WHERE id = ?
-            ");
-            $stmt->execute([$userId]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$user || $user['role'] !== 'manager') {
-                throw new Exception('无权限访问');
-            }
-
-            // 获取所有员工信息
-            $stmt = $this->db->prepare("
-                SELECT 
-                    u.id,
-                    u.username,
-                    u.role,
-                    e.store_id,
-                    s.name as store_name,
-                    e.hire_date,
-                    e.salary,
-                    e.position,
-                    u.created_at
-                FROM users u
-                LEFT JOIN employees e ON u.id = e.id
-                LEFT JOIN stores s ON e.store_id = s.id
-                WHERE u.role = 'employee'
-                ORDER BY u.created_at DESC
-            ");
-            $stmt->execute();
-            $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // 处理数据格式
-            foreach ($employees as &$employee) {
-                $employee['salary'] = (float)$employee['salary'];
-            }
-
-            echo json_encode([
-                'success' => true,
-                'employees' => $employees
-            ]);
-        } catch (Exception $e) {
-            error_log('Get employees error: ' . $e->getMessage());
-            http_response_code(500);
-            echo json_encode([
-                'success' => false,
-                'error' => $e->getMessage()
-            ]);
+    private function checkEmployeeAuth() {
+        $userId = $_SESSION['user_id'] ?? null;
+        if (!$userId) {
+            throw new Exception('用户未登录');
         }
+
+        $stmt = $this->db->prepare("
+            SELECT role FROM users 
+            WHERE id = ? AND role = 'employee'
+        ");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+
+        if (!$user) {
+            throw new Exception('非员工用户');
+        }
+
+        return $userId;
     }
 
-    public function addEmployee() {
+    private function checkManagerAuth() {
+        $userId = $_SESSION['user_id'] ?? null;
+        if (!$userId) {
+            throw new Exception('用户未登录');
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT role FROM users 
+            WHERE id = ? AND role = 'manager'
+        ");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+
+        if (!$user) {
+            throw new Exception('非管理员用户');
+        }
+
+        return $userId;
+    }
+
+    public function updateOrderStatus() {
         try {
-            $userId = $_SESSION['user_id'] ?? null;
-            if (!$userId) {
-                throw new Exception('用户未登录');
-            }
-
-            // 验证用户是否是管理员
-            $stmt = $this->db->prepare("
-                SELECT role FROM users WHERE id = ?
-            ");
-            $stmt->execute([$userId]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$user || $user['role'] !== 'manager') {
-                throw new Exception('无权限访问');
-            }
-
+            $this->checkEmployeeAuth();
+            
+            // 获取请求体数据
             $data = json_decode(file_get_contents('php://input'), true);
             
-            // 验证必要字段
-            if (!isset($data['username']) || !isset($data['password']) || !isset($data['store_id'])) {
+            if (!isset($data['order_no']) || !isset($data['status'])) {
                 throw new Exception('缺少必要参数');
             }
 
-            $this->db->beginTransaction();
-
-            // 创建用户账号
-            $stmt = $this->db->prepare("
-                INSERT INTO users (username, password, role, created_at)
-                VALUES (?, ?, 'employee', NOW())
-            ");
-            $stmt->execute([$data['username'], $data['password']]);
-            $employeeId = $this->db->lastInsertId();
-
-            // 创建员工记录
-            $stmt = $this->db->prepare("
-                INSERT INTO employees (id, store_id, hire_date, salary, position)
-                VALUES (?, ?, CURRENT_DATE, ?, ?)
-            ");
-            $stmt->execute([
-                $employeeId,
-                $data['store_id'],
-                $data['salary'] ?? 0,
-                $data['position'] ?? '销售'
-            ]);
-
-            $this->db->commit();
-
-            echo json_encode([
-                'success' => true,
-                'message' => '员工添加成功'
-            ]);
-        } catch (Exception $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
+            // 验证订单状态是否有效
+            $validStatuses = ['pending', 'processing', 'completed', 'cancelled'];
+            if (!in_array($data['status'], $validStatuses)) {
+                throw new Exception('无效的订单状态');
             }
-            error_log('Add employee error: ' . $e->getMessage());
+
+            // 更新订单状态
+            $stmt = $this->db->prepare("
+                UPDATE orders 
+                SET status = ?, 
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE order_no = ?
+            ");
+            
+            $result = $stmt->execute([$data['status'], $data['order_no']]);
+            
+            if ($result) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => '订单状态更新成功'
+                ]);
+            } else {
+                throw new Exception('订单状态更新失败');
+            }
+        } catch (Exception $e) {
             http_response_code(500);
             echo json_encode([
                 'success' => false,
@@ -138,144 +95,66 @@ class EmployeeController {
         }
     }
 
-    public function updateEmployee($id) {
+    public function getOrders() {
         try {
-            $userId = $_SESSION['user_id'] ?? null;
-            if (!$userId) {
-                throw new Exception('用户未登录');
-            }
-
-            // 验证用户是否是管理员
+            $this->checkEmployeeAuth();
+            
+            // 获取员工所在商店的订单
+            $userId = $_SESSION['user_id'];
+            
             $stmt = $this->db->prepare("
-                SELECT role FROM users WHERE id = ?
+                SELECT store_id 
+                FROM employees 
+                WHERE id = ?
             ");
             $stmt->execute([$userId]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$user || $user['role'] !== 'manager') {
-                throw new Exception('无权限访问');
+            $employee = $stmt->fetch();
+            
+            if (!$employee) {
+                throw new Exception('找不到员工信息');
             }
 
-            $data = json_decode(file_get_contents('php://input'), true);
+            $stmt = $this->db->prepare("
+                SELECT 
+                    o.order_no,
+                    CAST(o.total_amount AS DECIMAL(10,2)) as total_amount,
+                    o.status,
+                    o.created_at,
+                    u.username as customer_name,
+                    GROUP_CONCAT(p.name) as products,
+                    GROUP_CONCAT(oi.quantity) as quantities
+                FROM orders o
+                JOIN users u ON o.user_id = u.id
+                JOIN order_items oi ON o.order_no = oi.order_no
+                JOIN products p ON oi.product_id = p.id
+                WHERE o.store_id = ?
+                GROUP BY o.order_no, o.total_amount, o.status, o.created_at, u.username
+                ORDER BY o.created_at DESC
+            ");
+            
+            $stmt->execute([$employee['store_id']]);
+            $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $this->db->beginTransaction();
-
-            // 更新用户信息
-            if (isset($data['username']) || isset($data['password'])) {
-                $updates = [];
-                $params = [];
-                
-                if (isset($data['username'])) {
-                    $updates[] = 'username = ?';
-                    $params[] = $data['username'];
-                }
-                if (isset($data['password'])) {
-                    $updates[] = 'password = ?';
-                    $params[] = $data['password'];
-                }
-                
-                if (!empty($updates)) {
-                    $params[] = $id;
-                    $stmt = $this->db->prepare("
-                        UPDATE users 
-                        SET " . implode(', ', $updates) . "
-                        WHERE id = ?
-                    ");
-                    $stmt->execute($params);
-                }
+            // 处理数据类型
+            $formattedOrders = [];
+            foreach ($orders as $order) {
+                $formattedOrders[] = [
+                    'key' => $order['order_no'], // 添加唯一key
+                    'order_no' => $order['order_no'],
+                    'total_amount' => (float)$order['total_amount'],
+                    'status' => $order['status'],
+                    'created_at' => $order['created_at'],
+                    'customer_name' => $order['customer_name'],
+                    'products' => explode(',', $order['products']),
+                    'quantities' => array_map('intval', explode(',', $order['quantities']))
+                ];
             }
-
-            // 更新员工信息
-            if (isset($data['store_id']) || isset($data['salary']) || isset($data['position'])) {
-                $updates = [];
-                $params = [];
-                
-                if (isset($data['store_id'])) {
-                    $updates[] = 'store_id = ?';
-                    $params[] = $data['store_id'];
-                }
-                if (isset($data['salary'])) {
-                    $updates[] = 'salary = ?';
-                    $params[] = $data['salary'];
-                }
-                if (isset($data['position'])) {
-                    $updates[] = 'position = ?';
-                    $params[] = $data['position'];
-                }
-                
-                if (!empty($updates)) {
-                    $params[] = $id;
-                    $stmt = $this->db->prepare("
-                        UPDATE employees 
-                        SET " . implode(', ', $updates) . "
-                        WHERE id = ?
-                    ");
-                    $stmt->execute($params);
-                }
-            }
-
-            $this->db->commit();
 
             echo json_encode([
                 'success' => true,
-                'message' => '员工信息更新成功'
+                'data' => $formattedOrders // 确保返回的是数组
             ]);
         } catch (Exception $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-            error_log('Update employee error: ' . $e->getMessage());
-            http_response_code(500);
-            echo json_encode([
-                'success' => false,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    public function deleteEmployee($id) {
-        try {
-            $userId = $_SESSION['user_id'] ?? null;
-            if (!$userId) {
-                throw new Exception('用户未登录');
-            }
-
-            // 验证用户是否是管理员
-            $stmt = $this->db->prepare("
-                SELECT role FROM users WHERE id = ?
-            ");
-            $stmt->execute([$userId]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$user || $user['role'] !== 'manager') {
-                throw new Exception('无权限访问');
-            }
-
-            $this->db->beginTransaction();
-
-            // 删除员工记录
-            $stmt = $this->db->prepare("
-                DELETE FROM employees WHERE id = ?
-            ");
-            $stmt->execute([$id]);
-
-            // 删除用户账号
-            $stmt = $this->db->prepare("
-                DELETE FROM users WHERE id = ?
-            ");
-            $stmt->execute([$id]);
-
-            $this->db->commit();
-
-            echo json_encode([
-                'success' => true,
-                'message' => '员工删除成功'
-            ]);
-        } catch (Exception $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-            error_log('Delete employee error: ' . $e->getMessage());
             http_response_code(500);
             echo json_encode([
                 'success' => false,
@@ -286,78 +165,263 @@ class EmployeeController {
 
     public function getInventory() {
         try {
-            $userId = $_SESSION['user_id'] ?? null;
-            if (!$userId) {
-                throw new Exception('用户未登录');
-            }
-
-            // 获取员工所在的商店ID
+            $this->checkEmployeeAuth();
+            
+            // 获取员工所在商店的库存
+            $userId = $_SESSION['user_id'];
+            
             $stmt = $this->db->prepare("
-                SELECT e.store_id, u.role
-                FROM users u
-                LEFT JOIN employees e ON u.id = e.id
-                WHERE u.id = ?
+                SELECT store_id 
+                FROM employees 
+                WHERE id = ?
             ");
             $stmt->execute([$userId]);
-            $userInfo = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$userInfo || !in_array($userInfo['role'], ['employee', 'manager'])) {
-                throw new Exception('无权限访问');
+            $employee = $stmt->fetch();
+            
+            if (!$employee) {
+                throw new Exception('找不到员工信息');
             }
 
-            // 如果是管理员，获取所有商店的库存
-            if ($userInfo['role'] === 'manager') {
-                $stmt = $this->db->prepare("
-                    SELECT 
-                        i.id,
-                        p.name as product_name,
-                        p.description,
-                        p.price,
-                        i.quantity,
-                        s.name as store_name,
-                        i.store_id,
-                        i.updated_at
-                    FROM inventory i
-                    JOIN products p ON i.product_id = p.id
-                    JOIN stores s ON i.store_id = s.id
-                    ORDER BY s.name, p.name
-                ");
-                $stmt->execute();
-            } else {
-                // 如果是普通员工，只获取所在商店的库存
-                $stmt = $this->db->prepare("
-                    SELECT 
-                        i.id,
-                        p.name as product_name,
-                        p.description,
-                        p.price,
-                        i.quantity,
-                        s.name as store_name,
-                        i.store_id,
-                        i.updated_at
-                    FROM inventory i
-                    JOIN products p ON i.product_id = p.id
-                    JOIN stores s ON i.store_id = s.id
-                    WHERE i.store_id = ?
-                    ORDER BY p.name
-                ");
-                $stmt->execute([$userInfo['store_id']]);
-            }
-
+            $stmt = $this->db->prepare("
+                SELECT 
+                    p.id,
+                    p.name,
+                    p.description,
+                    CAST(p.price AS DECIMAL(10,2)) as price,
+                    si.quantity as stock,
+                    p.category
+                FROM products p
+                JOIN store_inventory si ON p.id = si.product_id
+                WHERE si.store_id = ? AND p.deleted_at IS NULL
+                ORDER BY p.category, p.name
+            ");
+            
+            $stmt->execute([$employee['store_id']]);
             $inventory = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // 处理数据格式
-            foreach ($inventory as &$item) {
-                $item['price'] = (float)$item['price'];
-                $item['quantity'] = (int)$item['quantity'];
-            }
+            // 处理数据类型
+            $formattedInventory = array_map(function($item) {
+                return [
+                    'key' => $item['id'],
+                    'id' => (int)$item['id'],
+                    'name' => $item['name'],
+                    'description' => $item['description'],
+                    'price' => (float)$item['price'],
+                    'stock' => (int)$item['stock'],
+                    'category' => $item['category']
+                ];
+            }, $inventory);
 
             echo json_encode([
                 'success' => true,
-                'inventory' => $inventory
+                'data' => $formattedInventory
             ]);
         } catch (Exception $e) {
-            error_log('Get inventory error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function updateInventory($productId) {
+        try {
+            $this->checkEmployeeAuth();
+            
+            // 获取员工所在商店
+            $userId = $_SESSION['user_id'];
+            $stmt = $this->db->prepare("
+                SELECT store_id 
+                FROM employees 
+                WHERE id = ?
+            ");
+            $stmt->execute([$userId]);
+            $employee = $stmt->fetch();
+            
+            if (!$employee) {
+                throw new Exception('找不到员工信息');
+            }
+
+            // 获取请求数据
+            $data = json_decode(file_get_contents('php://input'), true);
+            
+            if (!isset($data['stock']) || !is_numeric($data['stock'])) {
+                throw new Exception('库存数量无效');
+            }
+
+            // 检查商品是否存在于该商店的库存中
+            $stmt = $this->db->prepare("
+                SELECT 1 
+                FROM store_inventory 
+                WHERE store_id = ? AND product_id = ?
+            ");
+            $stmt->execute([$employee['store_id'], $productId]);
+            
+            if (!$stmt->fetch()) {
+                throw new Exception('商品不存在于当前商店库存中');
+            }
+
+            // 更新库存
+            $stmt = $this->db->prepare("
+                UPDATE store_inventory 
+                SET quantity = ?, 
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE store_id = ? AND product_id = ?
+            ");
+            
+            $result = $stmt->execute([
+                $data['stock'],
+                $employee['store_id'],
+                $productId
+            ]);
+
+            if ($result) {
+                // 同时更新商品总库存
+                $stmt = $this->db->prepare("
+                    UPDATE products 
+                    SET stock = (
+                        SELECT SUM(quantity) 
+                        FROM store_inventory 
+                        WHERE product_id = ?
+                    )
+                    WHERE id = ?
+                ");
+                $stmt->execute([$productId, $productId]);
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => '库存更新成功'
+                ]);
+            } else {
+                throw new Exception('库存更新失败');
+            }
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function getDashboard() {
+        try {
+            $this->checkEmployeeAuth();
+            
+            // 获取员工所在商店
+            $userId = $_SESSION['user_id'];
+            $stmt = $this->db->prepare("
+                SELECT store_id 
+                FROM employees 
+                WHERE id = ?
+            ");
+            $stmt->execute([$userId]);
+            $employee = $stmt->fetch();
+            
+            if (!$employee) {
+                throw new Exception('找不到员工信息');
+            }
+
+            // 获取今日订单数销售额
+            $stmt = $this->db->prepare("
+                SELECT 
+                    COUNT(DISTINCT o.order_no) as today_orders,
+                    COALESCE(SUM(o.total_amount), 0) as today_sales,
+                    COUNT(DISTINCT CASE WHEN o.status = 'pending' THEN o.order_no END) as pending_orders
+                FROM orders o
+                WHERE o.store_id = ? 
+                AND DATE(o.created_at) = CURRENT_DATE
+            ");
+            $stmt->execute([$employee['store_id']]);
+            $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // 获取最近订单
+            $stmt = $this->db->prepare("
+                SELECT 
+                    o.order_no,
+                    u.username as customer_name,
+                    CAST(o.total_amount AS DECIMAL(10,2)) as total_amount,
+                    o.status,
+                    o.created_at,
+                    GROUP_CONCAT(p.name) as products,
+                    GROUP_CONCAT(oi.quantity) as quantities
+                FROM orders o
+                JOIN users u ON o.user_id = u.id
+                JOIN order_items oi ON o.order_no = oi.order_no
+                JOIN products p ON oi.product_id = p.id
+                WHERE o.store_id = ?
+                GROUP BY o.order_no, u.username, o.total_amount, o.status, o.created_at
+                ORDER BY o.created_at DESC
+                LIMIT 5
+            ");
+            $stmt->execute([$employee['store_id']]);
+            $recentOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 格式化最近订单数据
+            $formattedOrders = array_map(function($order) {
+                return [
+                    'key' => $order['order_no'],
+                    'order_no' => $order['order_no'],
+                    'customer_name' => $order['customer_name'],
+                    'total_amount' => (float)$order['total_amount'],
+                    'status' => $order['status'],
+                    'created_at' => $order['created_at'],
+                    'products' => explode(',', $order['products']),
+                    'quantities' => array_map('intval', explode(',', $order['quantities']))
+                ];
+            }, $recentOrders);
+
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'todayOrders' => (int)$stats['today_orders'],
+                    'todaySales' => (float)$stats['today_sales'],
+                    'pendingOrders' => (int)$stats['pending_orders'],
+                    'recentOrders' => $formattedOrders
+                ]
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function getEmployees() {
+        try {
+            // 验证管理员权限
+            $this->checkManagerAuth();
+
+            // 获取所有员工信息
+            $stmt = $this->db->prepare("
+                SELECT 
+                    u.id,
+                    u.username,
+                    u.email,
+                    u.role,
+                    u.created_at,
+                    u.updated_at,
+                    e.store_id,
+                    s.name as store_name
+                FROM users u
+                LEFT JOIN employees e ON u.id = e.id
+                LEFT JOIN stores s ON e.store_id = s.id
+                WHERE u.role = 'employee'
+                ORDER BY u.created_at DESC
+            ");
+            $stmt->execute();
+            $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'data' => $employees
+            ]);
+        } catch (Exception $e) {
+            error_log('Get employees error: ' . $e->getMessage());
             http_response_code(500);
             echo json_encode([
                 'success' => false,

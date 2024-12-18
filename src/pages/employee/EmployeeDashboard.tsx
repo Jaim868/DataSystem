@@ -1,20 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, List, Typography, Tag } from 'antd';
+import { Card, Row, Col, Statistic, Table, Typography, Tag, Empty, message } from 'antd';
 import { ShoppingCartOutlined, DollarOutlined, UserOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 interface DashboardData {
   todayOrders: number;
   todaySales: number;
   pendingOrders: number;
   recentOrders: Array<{
+    key: string;
     order_no: string;
     customer_name: string;
     total_amount: number;
     status: string;
     created_at: string;
+    products: string[];
+    quantities: number[];
   }>;
 }
 
@@ -34,26 +37,74 @@ const EmployeeDashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       const response = await axios.get('/api/employee/dashboard');
-      setData(response.data);
+      if (response.data.success) {
+        setData(response.data.data);
+      } else {
+        message.error(response.data.error || '获取数据失败');
+      }
     } catch (error) {
       console.error('获取数据失败:', error);
+      message.error('获取仪表盘数据失败');
     } finally {
       setLoading(false);
     }
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'orange';
-      case 'processing':
-        return 'blue';
-      case 'completed':
-        return 'green';
-      default:
-        return 'default';
-    }
+    const colorMap: Record<string, string> = {
+      pending: 'orange',
+      processing: 'blue',
+      completed: 'green',
+      cancelled: 'red'
+    };
+    return colorMap[status] || 'default';
   };
+
+  const columns = [
+    {
+      title: '订单编号',
+      dataIndex: 'order_no',
+      key: 'order_no',
+    },
+    {
+      title: '客户名称',
+      dataIndex: 'customer_name',
+      key: 'customer_name',
+    },
+    {
+      title: '商品信息',
+      key: 'products',
+      render: (_: any, record: any) => (
+        <>
+          {record.products.map((product: string, index: number) => (
+            <div key={index}>
+              {product} × {record.quantities[index]}
+            </div>
+          ))}
+        </>
+      ),
+    },
+    {
+      title: '订单金额',
+      dataIndex: 'total_amount',
+      key: 'total_amount',
+      render: (amount: number) => `¥${amount.toFixed(2)}`,
+    },
+    {
+      title: '订单状态',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => (
+        <Tag color={getStatusColor(status)}>{status}</Tag>
+      ),
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => new Date(date).toLocaleString(),
+    },
+  ];
 
   return (
     <div>
@@ -96,34 +147,18 @@ const EmployeeDashboard: React.FC = () => {
         style={{ marginTop: 24 }}
         loading={loading}
       >
-        <List
-          dataSource={data.recentOrders}
-          renderItem={item => (
-            <List.Item
-              key={item.order_no}
-              extra={
-                <Tag color={getStatusColor(item.status)}>
-                  {item.status}
-                </Tag>
-              }
-            >
-              <List.Item.Meta
-                title={`订单号: ${item.order_no}`}
-                description={
-                  <>
-                    <Text>客户: {item.customer_name}</Text>
-                    <br />
-                    <Text>金额: ¥{item.total_amount.toFixed(2)}</Text>
-                    <br />
-                    <Text type="secondary">
-                      下单时间: {new Date(item.created_at).toLocaleString()}
-                    </Text>
-                  </>
-                }
-              />
-            </List.Item>
-          )}
-        />
+        {!loading && (
+          Array.isArray(data.recentOrders) && data.recentOrders.length === 0 ? (
+            <Empty description="暂无订单数据" />
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={data.recentOrders}
+              rowKey="order_no"
+              pagination={{ pageSize: 5 }}
+            />
+          )
+        )}
       </Card>
     </div>
   );

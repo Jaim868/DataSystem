@@ -1,96 +1,102 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Tag, InputNumber, Button, message, Space } from 'antd';
+import { Table, InputNumber, message } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import axios from 'axios';
 
-interface Product {
+interface InventoryItem {
+  key: number;
   id: number;
   name: string;
+  description: string;
+  price: number;
   stock: number;
-  min_stock: number;
-  max_stock: number;
-  status: 'normal' | 'low' | 'out';
+  category: string;
 }
 
 const InventoryManagement: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchInventory();
   }, []);
 
   const fetchInventory = async () => {
-    setLoading(true);
     try {
       const response = await axios.get('/api/employee/inventory');
-      setProducts(response.data);
+      if (response.data.success) {
+        setInventory(response.data.data || []);
+      } else {
+        message.error(response.data.error || '获取库存数据失败');
+      }
     } catch (error) {
+      console.error('获取库存数据失败:', error);
       message.error('获取库存数据失败');
     } finally {
       setLoading(false);
     }
   };
 
-  const updateStock = async (id: number, stock: number) => {
+  const handleStockChange = async (id: number, stock: number) => {
     try {
-      await axios.put(`/api/employee/inventory/${id}`, { stock });
-      message.success('库存更新成功');
-      fetchInventory();
+      const response = await axios.put(`/api/employee/inventory/${id}`, { stock });
+      if (response.data.success) {
+        message.success('库存更新成功');
+        fetchInventory();
+      } else {
+        message.error(response.data.error || '更新失败');
+      }
     } catch (error) {
-      message.error('库存更新失败');
+      console.error('更新库存失败:', error);
+      message.error('更新库存失败');
     }
   };
 
-  const columns = [
+  const columns: ColumnsType<InventoryItem> = [
     {
       title: '商品名称',
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: '当前库存',
+      title: '描述',
+      dataIndex: 'description',
+      key: 'description',
+      ellipsis: true,
+    },
+    {
+      title: '类别',
+      dataIndex: 'category',
+      key: 'category',
+    },
+    {
+      title: '价格',
+      dataIndex: 'price',
+      key: 'price',
+      render: (price: number) => `¥${price.toFixed(2)}`,
+    },
+    {
+      title: '库存',
       dataIndex: 'stock',
       key: 'stock',
-      render: (stock: number, record: Product) => (
+      render: (_, record) => (
         <InputNumber
           min={0}
-          value={stock}
-          onChange={(value) => updateStock(record.id, value || 0)}
+          value={record.stock}
+          onChange={(value) => handleStockChange(record.id, value || 0)}
         />
-      ),
-    },
-    {
-      title: '库存状态',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => {
-        const statusMap = {
-          normal: { color: 'green', text: '正常' },
-          low: { color: 'orange', text: '偏低' },
-          out: { color: 'red', text: '缺货' },
-        };
-        const { color, text } = statusMap[status as keyof typeof statusMap];
-        return <Tag color={color}>{text}</Tag>;
-      },
-    },
-    {
-      title: '库存范围',
-      key: 'stock_range',
-      render: (_: any, record: Product) => (
-        <span>{record.min_stock} - {record.max_stock}</span>
       ),
     },
   ];
 
   return (
-    <div>
-      <Table
-        columns={columns}
-        dataSource={products}
-        rowKey="id"
-        loading={loading}
-      />
-    </div>
+    <Table
+      columns={columns}
+      dataSource={inventory}
+      rowKey="id"
+      loading={loading}
+      pagination={{ pageSize: 10 }}
+    />
   );
 };
 

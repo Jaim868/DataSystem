@@ -100,74 +100,62 @@ class SupplierController {
             }
 
             // 获取供应商的统计数据
-            $stats = [
-                'total_products' => 0,
-                'total_orders' => 0,
-                'total_sales' => 0,
-                'recent_orders' => []
-            ];
-
-            // 获取产品总数
-            $stmt = $this->db->prepare("
-                SELECT COUNT(*) as count
-                FROM supplier_products sp
-                JOIN products p ON sp.product_id = p.id
-                WHERE sp.supplier_id = ?
-            ");
-            $stmt->execute([$userId]);
-            $stats['total_products'] = (int)$stmt->fetch(PDO::FETCH_ASSOC)['count'];
-
-            // 获取订单总数和销售额
             $stmt = $this->db->prepare("
                 SELECT 
-                    COUNT(DISTINCT o.order_no) as order_count,
-                    SUM(oi.quantity * oi.price) as total_sales
-                FROM orders o
-                JOIN order_items oi ON o.order_no = oi.order_no
-                JOIN supplier_products sp ON oi.product_id = sp.product_id
-                WHERE sp.supplier_id = ?
+                    total_orders,
+                    total_revenue,
+                    total_products,
+                    low_stock_products
+                FROM supplier_sales_view
+                WHERE supplier_id = ?
             ");
             $stmt->execute([$userId]);
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            $stats['total_orders'] = (int)$result['order_count'];
-            $stats['total_sales'] = (float)$result['total_sales'];
+            $stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            // 获取最近的订单
+            // 获取最近订单
             $stmt = $this->db->prepare("
                 SELECT 
                     o.order_no,
-                    o.created_at,
+                    p.name as product_name,
+                    oi.quantity,
+                    oi.quantity * sp.supply_price as total_amount,
                     o.status,
-                    GROUP_CONCAT(p.name) as products,
-                    SUM(oi.quantity * oi.price) as total_amount
+                    o.created_at
                 FROM orders o
                 JOIN order_items oi ON o.order_no = oi.order_no
                 JOIN products p ON oi.product_id = p.id
                 JOIN supplier_products sp ON p.id = sp.product_id
                 WHERE sp.supplier_id = ?
-                GROUP BY o.order_no, o.created_at, o.status
                 ORDER BY o.created_at DESC
                 LIMIT 5
             ");
             $stmt->execute([$userId]);
-            $stats['recent_orders'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $recentOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // 处理数据格式
-            foreach ($stats['recent_orders'] as &$order) {
-                $order['total_amount'] = (float)$order['total_amount'];
-                $order['products'] = explode(',', $order['products']);
-            }
-
+            // 返回数据
             echo json_encode([
                 'success' => true,
-                'stats' => $stats
+                'data' => [
+                    'totalProducts' => (int)($stats['total_products'] ?? 0),
+                    'totalRevenue' => (float)($stats['total_revenue'] ?? 0),
+                    'lowStockProducts' => (int)($stats['low_stock_products'] ?? 0),
+                    'recentOrders' => array_map(function($order) {
+                        return [
+                            'order_no' => $order['order_no'],
+                            'product_name' => $order['product_name'],
+                            'quantity' => (int)$order['quantity'],
+                            'total_amount' => (float)$order['total_amount'],
+                            'status' => $order['status'],
+                            'created_at' => $order['created_at']
+                        ];
+                    }, $recentOrders)
+                ]
             ]);
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode([
                 'success' => false,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'error' => $e->getMessage()
             ]);
         }
     }

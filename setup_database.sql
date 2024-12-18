@@ -270,5 +270,21 @@ WHERE p.deleted_at IS NULL
 GROUP BY p.id, p.name
 ORDER BY total_sales_amount DESC;
 
+-- 供应商销售统计视图
+CREATE OR REPLACE VIEW supplier_sales_view AS
+SELECT 
+    sp.supplier_id,
+    COUNT(DISTINCT oi.order_no) as total_orders,
+    SUM(oi.quantity) as total_quantity_sold,
+    SUM(oi.quantity * sp.supply_price) as total_revenue,
+    COUNT(CASE WHEN p.stock < 10 THEN 1 END) as low_stock_products,
+    COUNT(DISTINCT p.id) as total_products
+FROM supplier_products sp
+LEFT JOIN products p ON sp.product_id = p.id
+LEFT JOIN order_items oi ON p.id = oi.product_id
+LEFT JOIN orders o ON oi.order_no = o.order_no
+WHERE p.deleted_at IS NULL
+GROUP BY sp.supplier_id;
+
 -- 恢复外键检查
 SET FOREIGN_KEY_CHECKS=1;

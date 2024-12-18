@@ -16,6 +16,7 @@ require_once __DIR__ . '/controllers/OrderController.php';
 require_once __DIR__ . '/controllers/CartController.php';
 require_once __DIR__ . '/controllers/SupplierController.php';
 require_once __DIR__ . '/controllers/EmployeeController.php';
+require_once __DIR__ . '/controllers/AdminController.php';
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $uri = explode('/', $uri);
@@ -82,7 +83,14 @@ try {
             $controller = new ProductManagementController();
             switch ($_SERVER['REQUEST_METHOD']) {
                 case 'GET':
-                    echo json_encode($controller->getAll());
+                    try {
+                        $products = $controller->getAll();
+                        header('Content-Type: application/json');
+                        echo json_encode($products);
+                    } catch (Exception $e) {
+                        http_response_code(500);
+                        echo json_encode(['error' => $e->getMessage()]);
+                    }
                     break;
                 case 'POST':
                     $controller->addProduct();
@@ -165,7 +173,7 @@ try {
             }
             break;
 
-        // ��个订单管理
+        // 个订单管理
         case (preg_match('/^orders\/\d+$/', $resource) ? $resource : !$resource):
             $controller = new OrderController();
             $id = (int)$uri[count($uri) - 1];
@@ -245,10 +253,16 @@ try {
         // 员工库存管理路由
         case 'employee/inventory':
             $controller = new EmployeeController();
-            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-                $controller->getInventory();
-            } else {
-                throw new Exception('不支持的请求方法');
+            switch ($_SERVER['REQUEST_METHOD']) {
+                case 'GET':
+                    $controller->getInventory();
+                    break;
+                case 'PUT':
+                    $id = (int)end($uri);
+                    $controller->updateInventory($id);
+                    break;
+                default:
+                    throw new Exception('不支持的请求方法');
             }
             break;
 
@@ -264,11 +278,16 @@ try {
 
         // 员工订单路由
         case 'employee/orders':
-            $controller = new OrderController();
-            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-                $controller->getEmployeeOrders();
-            } else {
-                throw new Exception('不支持的请求方法');
+            $controller = new EmployeeController();
+            switch ($_SERVER['REQUEST_METHOD']) {
+                case 'GET':
+                    $controller->getOrders();
+                    break;
+                case 'PUT':
+                    $controller->updateOrderStatus();
+                    break;
+                default:
+                    throw new Exception('不支持的请求方法');
             }
             break;
 
@@ -291,6 +310,26 @@ try {
                 $controller->updateEmployee($id);
             } else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
                 $controller->deleteEmployee($id);
+            } else {
+                throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        // 管理员库存管理路由
+        case 'admin/inventory':
+            $controller = new ProductManagementController();
+            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                $controller->getInventory();
+            } else {
+                throw new Exception('不支持的请求方法');
+            }
+            break;
+
+        // 管理员仪表盘路由
+        case 'admin/dashboard':
+            $controller = new AdminController();
+            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                $controller->getDashboardStats();
             } else {
                 throw new Exception('不支持的请求方法');
             }

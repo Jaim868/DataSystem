@@ -5,6 +5,9 @@ class AdminController {
     private $db;
 
     public function __construct() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
         $this->db = Database::getInstance()->getConnection();
     }
 
@@ -19,7 +22,7 @@ class AdminController {
 
         $stmt = $this->db->prepare("
             SELECT role FROM users 
-            WHERE id = ? AND role = 'admin'
+            WHERE id = ? AND role = 'manager'
         ");
         $stmt->execute([$userId]);
         $user = $stmt->fetch();
@@ -32,40 +35,51 @@ class AdminController {
     }
 
     public function getDashboardStats() {
-        $this->checkAdminAuth();
-        
         try {
+            $this->checkAdminAuth();
+            
             // 获取总销售额
-            $stmt = $this->db->query("
-                SELECT SUM(total_amount) as total_sales
+            $stmt = $this->db->prepare("
+                SELECT COALESCE(SUM(total_amount), 0) as total_sales
                 FROM orders
                 WHERE status = 'completed'
             ");
-            $totalSales = $stmt->fetch()['total_sales'] ?? 0;
+            $stmt->execute();
+            $salesResult = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            // 获取总订单数
-            $stmt = $this->db->query("
-                SELECT COUNT(*) as total_orders
-                FROM orders
+            // 获取总用户数
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) as total_users
+                FROM users
+                WHERE role = 'customer'
             ");
-            $totalOrders = $stmt->fetch()['total_orders'] ?? 0;
+            $stmt->execute();
+            $usersResult = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            // 获取商品库存预警数量
-            $stmt = $this->db->query("
-                SELECT COUNT(*) as low_stock
-                FROM products
-                WHERE stock < 10 AND deleted_at IS NULL
+            // 获取总商店数
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) as total_stores
+                FROM stores
             ");
-            $lowStock = $stmt->fetch()['low_stock'] ?? 0;
+            $stmt->execute();
+            $storesResult = $stmt->fetch(PDO::FETCH_ASSOC);
 
+            header('Content-Type: application/json');
             echo json_encode([
-                'total_sales' => $totalSales,
-                'total_orders' => $totalOrders,
-                'low_stock' => $lowStock
+                'success' => true,
+                'data' => [
+                    'totalSales' => (float)$salesResult['total_sales'],
+                    'totalUsers' => (int)$usersResult['total_users'],
+                    'totalStores' => (int)$storesResult['total_stores']
+                ]
             ]);
-        } catch(PDOException $e) {
+        } catch (Exception $e) {
+            error_log('Get dashboard stats error: ' . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['error' => '获取统计数据失败']);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 

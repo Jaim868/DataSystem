@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Typography } from 'antd';
+import { Card, Row, Col, Statistic, Table, Typography, Tag, Empty, message } from 'antd';
 import { ShopOutlined, DollarOutlined, InboxOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
@@ -9,7 +9,14 @@ interface DashboardData {
   totalProducts: number;
   totalRevenue: number;
   lowStockProducts: number;
-  recentOrders: any[];
+  recentOrders: Array<{
+    order_no: string;
+    product_name: string;
+    quantity: number;
+    total_amount: number;
+    status: string;
+    created_at: string;
+  }>;
 }
 
 const SupplierDashboard: React.FC = () => {
@@ -28,12 +35,46 @@ const SupplierDashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       const response = await axios.get('/api/supplier/dashboard');
-      setData(response.data);
+      if (response.data.success && response.data.data) {
+        setData({
+          totalProducts: response.data.data.totalProducts || 0,
+          totalRevenue: response.data.data.totalRevenue || 0,
+          lowStockProducts: response.data.data.lowStockProducts || 0,
+          recentOrders: Array.isArray(response.data.data.recentOrders) 
+            ? response.data.data.recentOrders 
+            : []
+        });
+      } else {
+        message.error(response.data.error || '获取数据失败');
+        setData({
+          totalProducts: 0,
+          totalRevenue: 0,
+          lowStockProducts: 0,
+          recentOrders: []
+        });
+      }
     } catch (error) {
       console.error('获取数据失败:', error);
+      message.error('获取仪表盘数据失败');
+      setData({
+        totalProducts: 0,
+        totalRevenue: 0,
+        lowStockProducts: 0,
+        recentOrders: []
+      });
     } finally {
       setLoading(false);
     }
+  };
+
+  const getStatusColor = (status: string) => {
+    const colorMap: Record<string, string> = {
+      pending: 'orange',
+      processing: 'blue',
+      completed: 'green',
+      cancelled: 'red'
+    };
+    return colorMap[status] || 'default';
   };
 
   const columns = [
@@ -62,6 +103,15 @@ const SupplierDashboard: React.FC = () => {
       title: '订单状态',
       dataIndex: 'status',
       key: 'status',
+      render: (status: string) => (
+        <Tag color={getStatusColor(status)}>{status}</Tag>
+      )
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => new Date(date).toLocaleString()
     }
   ];
 
@@ -106,12 +156,18 @@ const SupplierDashboard: React.FC = () => {
         style={{ marginTop: 24 }}
         loading={loading}
       >
-        <Table
-          columns={columns}
-          dataSource={data.recentOrders}
-          rowKey="order_no"
-          pagination={{ pageSize: 5 }}
-        />
+        {!loading && (
+          Array.isArray(data.recentOrders) && data.recentOrders.length === 0 ? (
+            <Empty description="暂无订单数据" />
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={data.recentOrders}
+              rowKey="order_no"
+              pagination={{ pageSize: 5 }}
+            />
+          )
+        )}
       </Card>
     </div>
   );

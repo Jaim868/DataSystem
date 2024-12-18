@@ -6,12 +6,15 @@ import axios from 'axios';
 interface Employee {
   id: number;
   username: string;
-  store_id: number;
-  store_name: string;
-  hire_date: string;
-  salary: number;
-  position: string;
-  created_at: string;
+  email?: string;
+  role?: string;
+  store_id?: number;
+  store_name?: string;
+  hire_date?: string;
+  salary?: number;
+  position?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface Store {
@@ -36,10 +39,10 @@ const EmployeeManagement: React.FC = () => {
     setLoading(true);
     try {
       const response = await axios.get('/api/admin/employees');
-      const { success, employees: employeeData, error } = response.data;
+      const { success, data, error } = response.data;
 
-      if (success && Array.isArray(employeeData)) {
-        setEmployees(employeeData);
+      if (success && Array.isArray(data)) {
+        setEmployees(data);
       } else {
         console.error('获取员工失败:', error);
         message.error(error || '获取员工数据失败');
@@ -126,19 +129,19 @@ const EmployeeManagement: React.FC = () => {
       title: '薪资',
       dataIndex: 'salary',
       key: 'salary',
-      render: (salary: number) => `¥${salary.toFixed(2)}`,
+      render: (salary: number | undefined) => salary ? `¥${salary.toFixed(2)}` : '-',
     },
     {
       title: '入职日期',
       dataIndex: 'hire_date',
       key: 'hire_date',
-      render: (date: string) => new Date(date).toLocaleDateString(),
+      render: (date: string | undefined) => date ? new Date(date).toLocaleDateString() : '-',
     },
     {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string | undefined) => date ? new Date(date).toLocaleString() : '-',
     },
     {
       title: '操作',
