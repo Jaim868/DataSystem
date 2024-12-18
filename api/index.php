@@ -39,12 +39,24 @@ try {
                 // 获取单个产品详情
                 $id = (int)end($uri);
                 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-                    echo json_encode($controller->getProduct($id));
+                    try {
+                        $result = $controller->getProduct($id);
+                        echo json_encode(['success' => true, 'data' => $result]);
+                    } catch (Exception $e) {
+                        http_response_code(404);
+                        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+                    }
                 }
             } else {
                 // 获取所有产品
                 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-                    echo json_encode($controller->getAll());
+                    try {
+                        $result = $controller->getAll();
+                        echo json_encode($result);
+                    } catch (Exception $e) {
+                        http_response_code(500);
+                        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+                    }
                 }
             }
             break;
@@ -138,7 +150,7 @@ try {
             }
             break;
 
-        // 订单��由
+        // 订单由
         case 'orders':
             $controller = new OrderController();
             switch ($_SERVER['REQUEST_METHOD']) {
@@ -153,7 +165,7 @@ try {
             }
             break;
 
-        // 单个订单管理
+        // ��个订单管理
         case (preg_match('/^orders\/\d+$/', $resource) ? $resource : !$resource):
             $controller = new OrderController();
             $id = (int)$uri[count($uri) - 1];
@@ -293,7 +305,7 @@ try {
     error_log('API Error: ' . $e->getMessage());
     http_response_code(500);
     echo json_encode([
-        'error' => $e->getMessage(),
-        'trace' => $e->getTraceAsString()
+        'success' => false,
+        'error' => $e->getMessage()
     ]);
 } 

@@ -76,7 +76,7 @@ CREATE TABLE supplier_products (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
--- 创建商店库存表
+-- 创建���店库存表
 CREATE TABLE store_inventory (
     store_id INT NOT NULL,
     product_id INT NOT NULL,
@@ -306,3 +306,38 @@ INSERT INTO users (username, password, role, email, phone) VALUES
 ('employee1', 'password123', 'employee', 'employee1@example.com', '13734567890'),
 ('manager1', 'password123', 'manager', 'manager1@example.com', '13845678901');
 
+-- 清空现有数据
+TRUNCATE TABLE products;
+TRUNCATE TABLE stores;
+TRUNCATE TABLE store_inventory;
+
+-- 插入商店数据
+INSERT INTO stores (id, name, address, phone) VALUES
+(1, '渔具之家', '北京市朝阳区建国路88号', '010-12345678'),
+(2, '钓鱼人生', '上海市浦东新区陆家嘴1号', '021-87654321'),
+(3, '垂钓天地', '广州市天河区体育西路123号', '020-45678901');
+
+-- 插入商品数据
+INSERT INTO products (id, name, price, description, category, image_url, stock, rating) VALUES
+(1, '碳素钓鱼竿2.7米', 299.00, '超轻超硬碳素材质，适合各种钓位', '鱼竿', '/images/rod1.jpg', 100, 4.8),
+(2, '专业路亚竿套装', 599.00, '含各种假饵，全套装备一应俱全', '鱼竿', '/images/rod2.jpg', 80, 4.9),
+(3, '高档渔线套装', 89.00, '进口尼龙材质，拉力强韧耐用', '渔线', '/images/line1.jpg', 200, 4.7),
+(4, '精致浮漂50支装', 45.00, '灵敏度高，多种规格可选', '浮漂', '/images/float1.jpg', 500, 4.6),
+(5, '高级鱼饵套装', 129.00, '多种口味，适合各类鱼种', '鱼饵', '/images/bait1.jpg', 300, 4.8);
+
+-- 插入商店库存数据
+INSERT INTO store_inventory (store_id, product_id, quantity) VALUES
+-- 渔具之家的库存
+(1, 1, 30),  -- 碳素钓鱼竿
+(1, 2, 20),  -- 路亚竿套装
+(1, 3, 50),  -- 渔线套装
+
+-- 钓鱼人生的库存
+(2, 2, 25),  -- 路亚竿套装
+(2, 4, 100), -- 浮漂
+(2, 5, 60),  -- 鱼饵套装
+
+-- 垂钓天地的库存
+(3, 1, 15),  -- 碳素钓鱼竿
+(3, 3, 40),  -- 渔线套装
+(3, 5, 80);  -- 鱼饵套装

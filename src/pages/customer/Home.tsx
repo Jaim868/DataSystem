@@ -33,20 +33,32 @@ const Home: React.FC = () => {
   useEffect(() => {
     fetchProducts();
     fetchStores();
-  }, []);
+  }, [selectedStore]);
 
   const fetchProducts = async () => {
     try {
-      const response = await axios.get('/api/products');
-      if (Array.isArray(response.data)) {
+      const url = selectedStore 
+        ? `/api/products?store_id=${selectedStore}`
+        : '/api/products';
+      console.log('Fetching products from:', url);
+      const response = await axios.get(url);
+      console.log('Response data:', response.data);
+      
+      if (response.data && Array.isArray(response.data)) {
+        console.log('Setting products array:', response.data);
         setProducts(response.data);
+      } else if (response.data.data && Array.isArray(response.data.data)) {
+        console.log('Setting products from data property:', response.data.data);
+        setProducts(response.data.data);
       } else {
-        console.error('Invalid products data:', response.data);
+        console.error('Invalid products data structure:', response.data);
         message.error('获取商品数据格式错误');
+        setProducts([]);
       }
     } catch (error) {
       console.error('Error fetching products:', error);
       message.error('获取商品列表失败');
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -55,7 +67,12 @@ const Home: React.FC = () => {
   const fetchStores = async () => {
     try {
       const response = await axios.get('/api/stores');
-      setStores(response.data);
+      if (Array.isArray(response.data)) {
+        setStores(response.data);
+      } else {
+        console.error('Invalid stores data:', response.data);
+        message.error('获取商店列表失败');
+      }
     } catch (error) {
       console.error('Error fetching stores:', error);
       message.error('获取商店列表失败');
@@ -67,26 +84,22 @@ const Home: React.FC = () => {
   };
 
   const handleCategoryClick = (category: string) => {
-    setSelectedCategory(category);
+    setSelectedCategory(category === selectedCategory ? '' : category);
   };
 
-  const handleStoreChange = (value: number) => {
+  const handleStoreChange = (value: number | null) => {
     setSelectedStore(value);
   };
 
-  const filteredProducts = Array.isArray(products) ? products.filter(product => {
-    if (!product?.name || !product?.description) return false;
-    
-    const matchesSearch = searchText ? (
-        product.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchText.toLowerCase())
-    ) : true;
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = !searchText || 
+      (product.name && product.name.toLowerCase().includes(searchText.toLowerCase())) ||
+      (product.description && product.description.toLowerCase().includes(searchText.toLowerCase()));
     
     const matchesCategory = !selectedCategory || product.category === selectedCategory;
-    const matchesStore = !selectedStore || product.store_id === selectedStore;
     
-    return matchesSearch && matchesCategory && matchesStore;
-  }) : [];
+    return matchesSearch && matchesCategory;
+  });
 
   const categories = [
     { name: '鱼竿', icon: <CrownOutlined /> },
@@ -104,6 +117,7 @@ const Home: React.FC = () => {
           placeholder="全部商店"
           onChange={handleStoreChange}
           allowClear
+          value={selectedStore}
         >
           {stores.map(store => (
             <Option key={store.id} value={store.id}>{store.name}</Option>
@@ -142,6 +156,7 @@ const Home: React.FC = () => {
                     <div style={{ marginTop: 8 }}>
                       <Tag color="blue">{product.store_name}</Tag>
                       <Tag color="green">¥{product.price}</Tag>
+                      <Tag color="orange">库存: {product.stock}</Tag>
                     </div>
                   </>
                 }

@@ -36,7 +36,11 @@ const ProductDetail: React.FC = () => {
     const fetchProductDetail = async () => {
       try {
         const response = await axios.get(`/api/products/${id}`);
-        setProduct(response.data);
+        if (response.data.data) {
+          setProduct(response.data.data);
+        } else {
+          setProduct(response.data);
+        }
       } catch (error) {
         console.error('获取商品详情失败:', error);
         message.error('获取商品详情失败');
@@ -101,101 +105,183 @@ const ProductDetail: React.FC = () => {
     return <div>商品不存在</div>;
   }
 
+  const renderPrice = () => {
+    if (!product || typeof product.price === 'undefined') {
+      return null;
+    }
+
+    return (
+      <div className="product-price" style={{ marginBottom: '24px' }}>
+        {product.discount > 0 ? (
+          <>
+            <Text delete type="secondary" style={{ fontSize: '16px' }}>
+              原价: ¥{product.price.toFixed(2)}
+            </Text>
+            <Title level={3} style={{ margin: '8px 0', color: '#ff4d4f' }}>
+              优惠价: ¥{(product.price * (1 - (product.discount || 0) / 100)).toFixed(2)}
+            </Title>
+            <Tag color="red">优惠 {product.discount}% OFF</Tag>
+          </>
+        ) : (
+          <Title level={3} style={{ margin: '8px 0', color: '#ff4d4f' }}>
+            ¥{product.price.toFixed(2)}
+          </Title>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="product-detail" style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* 商品标题区域 */}
-      <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-        <Title level={1} className="product-detail-title" style={{ fontSize: '48px', marginBottom: '16px' }}>
+    <div className="product-detail" style={{ 
+      padding: '24px 3%',  // 减小边距，使用百分比
+      maxWidth: '100%',    // 允许内容填充整个屏幕
+      margin: '0 auto',
+      minHeight: '100vh',
+      background: '#f5f5f5'
+    }}>
+      {/* 标题区域 - 减小间距 */}
+      <div style={{ 
+        textAlign: 'center', 
+        marginBottom: '24px',
+        padding: '0 5%'
+      }}>
+        <Title level={1} style={{ 
+          fontSize: 'min(36px, calc(24px + 1vw))',  // 限制最大字体大小
+          marginBottom: '12px'
+        }}>
           {product.name}
         </Title>
-        <Text className="product-detail-description" type="secondary" style={{ fontSize: '18px' }}>
+        <Text type="secondary" style={{ 
+          fontSize: 'min(16px, calc(14px + 0.2vw))',
+          maxWidth: '100%',  // 允许文字填充容器
+          display: 'inline-block',
+          lineHeight: '1.6'
+        }}>
           {product.description}
         </Text>
       </div>
 
-      <Row gutter={[48, 48]}>
+      {/* 主要内容区域 - 调整间距和比例 */}
+      <Row gutter={[24, 24]} style={{ margin: '0' }}>  {/* 减小栅格间距，移除外边距 */}
         {/* 左侧商品图片 */}
-        <Col xs={24} md={14}>
-          <div style={{ position: 'sticky', top: '24px' }}>
+        <Col xs={24} md={12} style={{ padding: '12px' }}>  {/* 减小内边距 */}
+          <div style={{ 
+            background: '#fff',
+            padding: '16px',
+            borderRadius: '8px',
+            marginBottom: '16px'
+          }}>
             <img 
-              className="product-detail-image"
               src={product.image_url} 
               alt={product.name} 
               style={{ 
-                width: '100%', 
+                width: '100%',
                 height: 'auto',
-                borderRadius: '12px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                maxHeight: 'min(600px, calc(300px + 20vw))',  // 更灵活的高度调整
+                objectFit: 'contain'
               }} 
             />
+          </div>
+          
+          {/* 商品详情标签页 */}
+          <div style={{ 
+            background: '#fff',
+            padding: '16px',
+            borderRadius: '8px'
+          }}>
+            <Tabs defaultActiveKey="1" size="large">  {/* 增大标签页大小 */}
+              <TabPane tab="商品详情" key="1">
+                <div style={{ padding: '16px' }}>
+                  <Title level={4} style={{ fontSize: 'min(20px, calc(16px + 0.3vw))' }}>
+                    产品描述
+                  </Title>
+                  <Paragraph style={{ fontSize: 'min(16px, calc(14px + 0.2vw))' }}>
+                    {product.description}
+                  </Paragraph>
+                  
+                  <Divider />
+                  
+                  <Title level={4} style={{ fontSize: 'min(20px, calc(16px + 0.3vw))' }}>
+                    规格参数
+                  </Title>
+                  <ul style={{ 
+                    paddingLeft: '20px',
+                    fontSize: 'min(16px, calc(14px + 0.2vw))'
+                  }}>
+                    <li>类别：{product.category}</li>
+                    {product.features?.map((feature, index) => (
+                      <li key={index}>{feature}</li>
+                    ))}
+                  </ul>
+                </div>
+              </TabPane>
+              <TabPane tab="评价" key="2">
+                <div style={{ padding: '16px' }}>
+                  <Text>暂无评价</Text>
+                </div>
+              </TabPane>
+            </Tabs>
           </div>
         </Col>
 
         {/* 右侧商品信息 */}
-        <Col xs={24} md={10}>
-          <div style={{ position: 'sticky', top: '24px' }}>
-            <div style={{ marginBottom: '24px' }}>
-              <Space>
-                <ShopOutlined />
-                <Text strong>{product.store_name}</Text>
+        <Col xs={24} md={12} style={{ padding: '12px' }}>
+          <div style={{ 
+            background: '#fff',
+            padding: '24px',
+            borderRadius: '8px',
+            position: 'sticky',
+            top: '24px',
+            height: 'fit-content'  // 适应内容高度
+          }}>
+            <div style={{ marginBottom: '20px' }}>
+              <Space size="large">
+                <ShopOutlined style={{ fontSize: 'min(24px, calc(18px + 0.3vw))' }} />
+                <Text strong style={{ fontSize: 'min(18px, calc(16px + 0.2vw))' }}>
+                  {product.store_name}
+                </Text>
               </Space>
             </div>
 
-            <div className="product-price" style={{ marginBottom: '24px' }}>
-              {product.discount > 0 ? (
-                <>
-                  <Text delete type="secondary" style={{ fontSize: '16px' }}>
-                    原价: ¥{product.price.toFixed(2)}
-                  </Text>
-                  <Title level={3} style={{ margin: '8px 0', color: '#ff4d4f' }}>
-                    优惠价: ¥{(product.price * (1 - product.discount / 100)).toFixed(2)}
-                  </Title>
-                  <Tag color="red">优惠 {product.discount}% OFF</Tag>
-                </>
-              ) : (
-                <Title level={3} style={{ margin: '8px 0', color: '#ff4d4f' }}>
-                  ¥{product.price.toFixed(2)}
-                </Title>
-              )}
+            {/* 调整价格显示 */}
+            <div className="product-price" style={{ 
+              marginBottom: '24px',
+              fontSize: 'min(32px, calc(24px + 0.5vw))'  // 更大的价格字体
+            }}>
+              {renderPrice()}
             </div>
 
-            <Title level={3}>选择配置</Title>
-            
             <Divider />
 
             <div style={{ marginBottom: '24px' }}>
-              <Text strong style={{ fontSize: '16px', marginBottom: '8px', display: 'block' }}>
+              <Text strong style={{ 
+                display: 'block', 
+                marginBottom: '12px',
+                fontSize: 'min(18px, calc(16px + 0.2vw))'
+              }}>
                 数量
               </Text>
-              <InputNumber
-                min={1}
-                max={product.stock}
-                value={quantity}
-                onChange={(value) => setQuantity(value || 1)}
-                style={{ width: '120px' }}
-              />
-              <Text type="secondary" style={{ marginLeft: '12px' }}>
-                库存: {product.stock}
-              </Text>
+              <Space size="large">
+                <InputNumber
+                  min={1}
+                  max={product.stock}
+                  value={quantity}
+                  onChange={(value) => setQuantity(value || 1)}
+                  style={{ 
+                    width: 'min(150px, calc(120px + 2vw))',
+                    height: '40px'
+                  }}
+                  size="large"
+                />
+                <Text type="secondary" style={{ 
+                  fontSize: 'min(16px, calc(14px + 0.2vw))'
+                }}>
+                  库存: {product.stock}
+                </Text>
+              </Space>
             </div>
 
-            {product.features && product.features.length > 0 && (
-              <div style={{ marginBottom: '24px' }}>
-                <Text strong style={{ fontSize: '16px', marginBottom: '8px', display: 'block' }}>
-                  产品特点
-                </Text>
-                <ul className="product-detail-features" style={{ paddingLeft: '20px' }}>
-                  {product.features.map((feature, index) => (
-                    <li key={index} style={{ marginBottom: '8px' }}>
-                      <Text>{feature}</Text>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
             <Button 
-              className="buy-button"
               type="primary" 
               size="large"
               icon={<ShoppingCartOutlined />}
@@ -203,48 +289,36 @@ const ProductDetail: React.FC = () => {
               loading={addingToCart}
               disabled={loading || !product}
               block
-              style={{ height: '50px', fontSize: '18px' }}
+              style={{ 
+                height: '48px',
+                fontSize: 'min(18px, calc(16px + 0.2vw))',
+                marginBottom: '24px'
+              }}
             >
               {product.stock <= 0 ? '暂时缺货' : '加入购物车'}
             </Button>
 
-            {/* 销量和评分信息 */}
-            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between' }}>
-              <Text type="secondary">销量: {product.sales}</Text>
-              <Text type="secondary">评分: {product.rating}分</Text>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-around',
+              background: '#f8f8f8',
+              padding: '16px',
+              borderRadius: '8px'
+            }}>
+              <Space size="large">
+                <Text type="secondary" style={{ fontSize: 'min(16px, calc(14px + 0.2vw))' }}>
+                  销量: <Text strong>{product.sales}</Text>
+                </Text>
+              </Space>
+              <Space size="large">
+                <Text type="secondary" style={{ fontSize: 'min(16px, calc(14px + 0.2vw))' }}>
+                  评分: <Text strong>{product.rating}分</Text>
+                </Text>
+              </Space>
             </div>
           </div>
         </Col>
       </Row>
-
-      {/* 商品详细信息标签页 */}
-      <div style={{ marginTop: '48px' }}>
-        <Tabs className="product-detail-tabs" defaultActiveKey="1" onChange={setSelectedTab}>
-          <TabPane tab="商品详情" key="1">
-            <div style={{ padding: '24px' }}>
-              <Paragraph>
-                <Title level={4}>产品描述</Title>
-                {product.description}
-              </Paragraph>
-              
-              <Divider />
-              
-              <Title level={4}>规格参数</Title>
-              <ul>
-                <li>类别：{product.category}</li>
-                {product.features?.map((feature, index) => (
-                  <li key={index}>{feature}</li>
-                ))}
-              </ul>
-            </div>
-          </TabPane>
-          <TabPane tab="评价" key="2">
-            <div style={{ padding: '24px' }}>
-              <Text>暂无评价</Text>
-            </div>
-          </TabPane>
-        </Tabs>
-      </div>
     </div>
   );
 };
