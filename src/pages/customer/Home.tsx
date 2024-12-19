@@ -88,7 +88,7 @@ const Home: React.FC = () => {
       let url = '/api/products';
       const params = new URLSearchParams();
       
-      if (selectedStore) {
+      if (selectedStore !== null) {
         params.append('store_id', selectedStore.toString());
       }
       
@@ -96,10 +96,8 @@ const Home: React.FC = () => {
         const category = categories.find(cat => cat.name === selectedCategory);
         if (category) {
           if ('categories' in category && category.categories) {
-            // 如果是渔具分类，传递子分类列表
             category.categories.forEach(cat => params.append('categories[]', cat));
           } else if ('category' in category) {
-            // 其他分类直接传递
             params.append('category', category.category);
           }
         }
@@ -111,9 +109,6 @@ const Home: React.FC = () => {
       }
       
       const response = await axios.get(url);
-      console.log('Products Response:', response.data); // 添加调试日志
-      
-      // 直接使用响应数据，不再进行额外的前端筛选
       setProducts(response.data || []);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -140,8 +135,12 @@ const Home: React.FC = () => {
   // 初始化数据
   useEffect(() => {
     fetchStores();
-    fetchProducts();
   }, []);
+
+  // 监听筛选条件变化
+  useEffect(() => {
+    fetchProducts();
+  }, [selectedStore, selectedCategory]);
 
   // 处理搜索
   const handleSearch = (value: string) => {
@@ -159,18 +158,15 @@ const Home: React.FC = () => {
       // 如果搜索框清空，重新获取所有商品
       fetchProducts();
     }
-    setSelectedCategory('');
   };
 
   // 处理分类选择
   const handleCategoryClick = (category: string) => {
     if (category === selectedCategory) {
       setSelectedCategory('');
-      fetchProducts();
     } else {
       setSelectedCategory(category);
       setSearchText('');
-      fetchProducts();
     }
   };
 
@@ -178,8 +174,6 @@ const Home: React.FC = () => {
   const handleStoreChange = (value: number | null) => {
     setSelectedStore(value);
     setSearchText('');
-    setSelectedCategory('');
-    fetchProducts();
   };
 
   // 渲染商店选择器
@@ -249,14 +243,7 @@ const Home: React.FC = () => {
   return (
     <div style={{ padding: '24px' }}>
       <Card style={{ marginBottom: 24 }}>
-        <Search
-          placeholder="搜索商品"
-          value={searchText}
-          onSearch={handleSearch}
-          onChange={(e) => handleSearch(e.target.value)}
-          allowClear
-          style={{ maxWidth: 400, marginBottom: 24 }}
-        />
+      
         <Divider />
         <Row gutter={24}>
           {categories.map(category => (

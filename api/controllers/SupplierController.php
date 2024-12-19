@@ -425,10 +425,10 @@ class SupplierController {
                     COUNT(DISTINCT CASE WHEN so.status = 'pending' THEN so.order_no END) as pending_orders,
                     COUNT(DISTINCT CASE WHEN so.status = 'shipping' THEN so.order_no END) as shipping_orders
                 FROM supplier_products sp
-                LEFT JOIN products p ON sp.product_id = p.id
-                LEFT JOIN supply_order_items soi ON p.id = soi.product_id
-                LEFT JOIN supply_orders so ON soi.order_no = so.order_no
-                WHERE sp.supplier_id = ? AND p.deleted_at IS NULL
+                LEFT JOIN products p ON sp.product_id = p.id AND p.deleted_at IS NULL
+                LEFT JOIN supply_orders so ON so.supplier_id = sp.supplier_id
+                LEFT JOIN supply_order_items soi ON soi.order_no = so.order_no AND soi.product_id = sp.product_id
+                WHERE sp.supplier_id = ?
             ");
             
             $stmt->execute([$userId]);
@@ -448,7 +448,7 @@ class SupplierController {
                 FROM supply_orders so
                 JOIN supply_order_items soi ON so.order_no = soi.order_no
                 JOIN stores s ON so.store_id = s.id
-                JOIN products p ON soi.product_id = p.id
+                JOIN products p ON soi.product_id = p.id AND p.deleted_at IS NULL
                 WHERE so.supplier_id = ?
                 ORDER BY so.created_at DESC
                 LIMIT 5
