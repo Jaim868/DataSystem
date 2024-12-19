@@ -12,6 +12,8 @@ DROP TABLE IF EXISTS employees;
 DROP TABLE IF EXISTS suppliers;
 DROP TABLE IF EXISTS stores;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS supply_orders;
+DROP TABLE IF EXISTS supply_order_items;
 
 -- 创建用户表
 CREATE TABLE users (
@@ -68,7 +70,6 @@ CREATE TABLE products (
     price DECIMAL(10,2) NOT NULL,
     category VARCHAR(50),
     image_url VARCHAR(255),
-    stock INT NOT NULL DEFAULT 0,
     rating DECIMAL(2,1) DEFAULT 5.0,
     sales INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -93,7 +94,6 @@ CREATE TABLE supplier_products (
     supplier_id INT NOT NULL,
     product_id INT NOT NULL,
     supply_price DECIMAL(10,2) NOT NULL,
-    last_supply_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (supplier_id, product_id),
     FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
     FOREIGN KEY (product_id) REFERENCES products(id)
@@ -135,6 +135,30 @@ CREATE TABLE order_items (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
+-- 创建供应订单表（商店向供应商下单）
+CREATE TABLE supply_orders (
+    order_no VARCHAR(20) PRIMARY KEY,
+    supplier_id INT NOT NULL,
+    store_id INT NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    status ENUM('pending', 'processing', 'shipping', 'completed', 'cancelled') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    FOREIGN KEY (store_id) REFERENCES stores(id)
+);
+
+-- 创建供应订单项目表
+CREATE TABLE supply_order_items (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    order_no VARCHAR(20) NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+    supply_price DECIMAL(10,2) NOT NULL,
+    FOREIGN KEY (order_no) REFERENCES supply_orders(order_no),
+    FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
 -- 插入测试数据
 -- 创建用户
 INSERT INTO users (id, username, password, role, email, phone) VALUES 
@@ -164,17 +188,17 @@ INSERT INTO suppliers (id, company_name, contact_name, phone, address) VALUES
 (6, '渔具供应商1', '张三', '13900000001', '广州市天河区123号');
 
 -- 创建商品
-INSERT INTO products (id, name, description, price, category, image_url, stock, rating, sales) VALUES 
-(1, '专业钓鱼竿', '碳纤维材质，轻便耐用', 299.99, '鱼竿', '/images/rod1.jpg', 100, 4.8, 150),
-(2, '高级渔线', '超强拉力不易断裂', 49.99, '渔线', '/images/line1.jpg', 200, 4.5, 300),
-(3, '精致鱼钩', '日本进口，锋利持久', 19.99, '鱼钩', '/images/hook1.jpg', 500, 4.7, 450),
-(4, '多功能鱼篓', '大容量，防水耐用', 159.99, '工具', '/images/basket1.jpg', 80, 4.6, 120),
-(5, '专业钓椅', '便携折叠，承重150kg', 199.99, '工具', '/images/chair1.jpg', 60, 4.9, 200),
-(6, '高级饵料', '进口配方，效果显著', 29.99, '饵料', '/images/bait1.jpg', 400, 4.4, 600),
-(7, '防晒钓鱼帽', '透气防晒，舒适耐用', 89.99, '服饰', '/images/hat1.jpg', 150, 4.3, 80),
-(8, '防水钓鱼服', '高品质防水面料', 399.99, '服饰', '/images/cloth1.jpg', 100, 4.7, 60),
-(9, '钓鱼工具箱', '多层收纳，防水防潮', 129.99, '工具', '/images/box1.jpg', 120, 4.5, 90),
-(10, '电子咬钩器', '灵敏度高，防水设计', 79.99, '工具', '/images/bite1.jpg', 200, 4.6, 150);
+INSERT INTO products (id, name, description, price, category, image_url, rating, sales) VALUES 
+(1, '专业钓鱼竿', '碳纤维材质，轻便耐用', 299.99, '鱼竿', '/images/rod1.jpg', 4.8, 150),
+(2, '高级渔线', '超强拉力不易断裂', 49.99, '渔线', '/images/line1.jpg', 4.5, 300),
+(3, '精致鱼钩', '日本口，锋利持久', 19.99, '鱼钩', '/images/hook1.jpg', 4.7, 450),
+(4, '多功能鱼篓', '大容量，防水耐用', 159.99, '工具', '/images/basket1.jpg', 4.6, 120),
+(5, '专业钓椅', '便携折叠，承重150kg', 199.99, '工具', '/images/chair1.jpg', 4.9, 200),
+(6, '高级饵料', '进口配方，效果显著', 29.99, '饵料', '/images/bait1.jpg', 4.4, 600),
+(7, '防晒钓鱼帽', '透气防晒，舒适耐用', 89.99, '服饰', '/images/hat1.jpg', 4.3, 80),
+(8, '防水钓鱼服', '高品质防水面料', 399.99, '服饰', '/images/cloth1.jpg', 4.7, 60),
+(9, '钓鱼工具箱', '多层收纳，防水防潮', 129.99, '工具', '/images/box1.jpg', 4.5, 90),
+(10, '电子咬钩器', '灵敏度高，防水设计', 79.99, '工具', '/images/bite1.jpg', 4.6, 150);
 
 -- 创建库存
 INSERT INTO store_inventory (store_id, product_id, quantity) VALUES 
@@ -224,7 +248,28 @@ INSERT INTO order_items (order_no, product_id, quantity, price) VALUES
 ('ORD202301005', 2, 2, 49.99),
 ('ORD202301005', 3, 5, 19.99);
 
--- 删除原有的订单相关视图
+-- 创建供应订单
+INSERT INTO supply_orders (order_no, supplier_id, store_id, total_amount, status, created_at) VALUES 
+('SUP202301001', 6, 1, 369.97, 'completed', '2023-01-15 10:00:00'),
+('SUP202301002', 6, 2, 249.98, 'completed', '2023-01-16 11:30:00'),
+('SUP202301003', 6, 3, 179.98, 'pending', '2023-01-17 14:20:00'),
+('SUP202301004', 6, 1, 459.96, 'processing', CURRENT_DATE),
+('SUP202301005', 6, 2, 229.98, 'pending', CURRENT_DATE);
+
+-- 创建供应订单项目
+INSERT INTO supply_order_items (order_no, product_id, quantity, supply_price) VALUES 
+('SUP202301001', 1, 1, 200.00),
+('SUP202301001', 2, 1, 30.00),
+('SUP202301001', 3, 1, 10.00),
+('SUP202301002', 4, 1, 100.00),
+('SUP202301002', 5, 1, 150.00),
+('SUP202301003', 6, 6, 15.00),
+('SUP202301004', 1, 1, 50.00),
+('SUP202301004', 4, 1, 250.00),
+('SUP202301005', 2, 2, 80.00),
+('SUP202301005', 3, 5, 45.00);
+
+-- 删除原有���订单相关视图
 
 
 -- 创建综合订单视图
@@ -590,54 +635,33 @@ CREATE OR REPLACE VIEW supplier_comprehensive_view AS
 WITH supplier_stats AS (
     SELECT 
         sp.supplier_id,
-        COUNT(DISTINCT o.order_no) as total_orders,
-        COALESCE(SUM(oi.quantity * sp.supply_price), 0) as total_revenue,
+        COUNT(DISTINCT so.order_no) as total_orders,
+        COALESCE(SUM(soi.quantity * soi.supply_price), 0) as total_revenue,
         COUNT(DISTINCT sp.product_id) as total_products,
-        COUNT(DISTINCT CASE WHEN p.stock < 10 THEN p.id END) as low_stock_products
+        COUNT(DISTINCT CASE WHEN so.status = 'pending' THEN so.order_no END) as pending_orders
     FROM supplier_products sp
-    LEFT JOIN (
-        SELECT * FROM products WHERE deleted_at IS NULL
-    ) p ON sp.product_id = p.id
-    LEFT JOIN order_items oi ON p.id = oi.product_id
-    LEFT JOIN orders o ON oi.order_no = o.order_no
+    LEFT JOIN products p ON sp.product_id = p.id
+    LEFT JOIN supply_order_items soi ON p.id = soi.product_id
+    LEFT JOIN supply_orders so ON soi.order_no = so.order_no
+    WHERE p.deleted_at IS NULL
     GROUP BY sp.supplier_id
-),
-supplier_products_info AS (
-    SELECT 
-        sp.supplier_id,
-        p.id as product_id,
-        p.name as product_name,
-        p.price,
-        p.description,
-        p.category,
-        p.image_url,
-        p.stock,
-        p.rating,
-        sp.supply_price,
-        p.created_at as product_created_at
-    FROM supplier_products sp
-    JOIN (
-        SELECT * FROM products WHERE deleted_at IS NULL
-    ) p ON sp.product_id = p.id
 ),
 supplier_orders_info AS (
     SELECT 
-        sp.supplier_id,
-        o.order_no,
-        s.name as store_name,
+        s.id as supplier_id,
+        so.order_no,
+        st.name as store_name,
         p.name as product_name,
-        oi.quantity,
-        sp.supply_price,
-        (oi.quantity * sp.supply_price) as total_amount,
-        o.status,
-        o.created_at as order_created_at
-    FROM supplier_products sp
-    JOIN (
-        SELECT * FROM products WHERE deleted_at IS NULL
-    ) p ON sp.product_id = p.id
-    JOIN order_items oi ON p.id = oi.product_id
-    JOIN orders o ON oi.order_no = o.order_no
-    JOIN stores s ON o.store_id = s.id
+        soi.quantity,
+        soi.supply_price,
+        (soi.quantity * soi.supply_price) as total_amount,
+        so.status,
+        so.created_at as order_created_at
+    FROM suppliers s
+    JOIN supply_orders so ON s.id = so.supplier_id
+    JOIN supply_order_items soi ON so.order_no = soi.order_no
+    JOIN products p ON soi.product_id = p.id
+    JOIN stores st ON so.store_id = st.id
 )
 SELECT 
     u.id as supplier_id,
@@ -651,17 +675,14 @@ SELECT
     ss.total_orders,
     ss.total_revenue,
     ss.total_products,
-    ss.low_stock_products,
-    spi.product_id,
-    spi.product_name,
-    spi.price,
-    spi.description,
-    spi.category,
-    spi.image_url,
-    spi.stock,
-    spi.rating,
-    spi.supply_price,
-    spi.product_created_at,
+    ss.pending_orders,
+    p.id as product_id,
+    p.name as product_name,
+    p.price as retail_price,
+    p.description,
+    p.category,
+    p.image_url,
+    sp.supply_price,
     soi.order_no,
     soi.store_name,
     soi.quantity,
@@ -671,7 +692,8 @@ SELECT
 FROM users u
 JOIN suppliers s ON u.id = s.id
 LEFT JOIN supplier_stats ss ON s.id = ss.supplier_id
-LEFT JOIN supplier_products_info spi ON s.id = spi.supplier_id
+LEFT JOIN supplier_products sp ON s.id = sp.supplier_id
+LEFT JOIN products p ON sp.product_id = p.id
 LEFT JOIN supplier_orders_info soi ON s.id = soi.supplier_id
 WHERE u.role = 'supplier';
 

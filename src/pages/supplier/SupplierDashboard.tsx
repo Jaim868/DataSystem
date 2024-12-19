@@ -1,16 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Typography, Tag, Empty, message } from 'antd';
-import { ShopOutlined, DollarOutlined, InboxOutlined } from '@ant-design/icons';
-import axios from 'axios';
+import React, { useEffect, useState } from 'react';
+import { Card, Row, Col, Table, Typography, Statistic } from 'antd';
+import { ShopOutlined, DollarOutlined, FileOutlined, CarOutlined } from '@ant-design/icons';
+import { getSupplierDashboard } from '../../api/supplier';
+import { formatDateTime } from '../../utils/dateUtils';
 
 const { Title } = Typography;
 
 interface DashboardData {
   totalProducts: number;
+  totalOrders: number;
   totalRevenue: number;
-  lowStockProducts: number;
+  pendingOrders: number;
+  shippingOrders: number;
   recentOrders: Array<{
     order_no: string;
+    store_name: string;
+    store_address: string;
     product_name: string;
     quantity: number;
     total_amount: number;
@@ -20,68 +25,36 @@ interface DashboardData {
 }
 
 const SupplierDashboard: React.FC = () => {
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<DashboardData>({
-    totalProducts: 0,
-    totalRevenue: 0,
-    lowStockProducts: 0,
-    recentOrders: []
-  });
+  const [data, setData] = useState<DashboardData | null>(null);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
-    try {
-      const response = await axios.get('/api/supplier/dashboard');
-      if (response.data.success && response.data.data) {
-        setData({
-          totalProducts: response.data.data.totalProducts || 0,
-          totalRevenue: response.data.data.totalRevenue || 0,
-          lowStockProducts: response.data.data.lowStockProducts || 0,
-          recentOrders: Array.isArray(response.data.data.recentOrders) 
-            ? response.data.data.recentOrders 
-            : []
-        });
-      } else {
-        message.error(response.data.error || '获取数据失败');
-        setData({
-          totalProducts: 0,
-          totalRevenue: 0,
-          lowStockProducts: 0,
-          recentOrders: []
-        });
+    const fetchData = async () => {
+      try {
+        const response = await getSupplierDashboard();
+        setData(response.data);
+      } catch (error) {
+        console.error('获取仪表盘数据失败:', error);
       }
-    } catch (error) {
-      console.error('获取数据失败:', error);
-      message.error('获取仪表盘数据失败');
-      setData({
-        totalProducts: 0,
-        totalRevenue: 0,
-        lowStockProducts: 0,
-        recentOrders: []
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    const colorMap: Record<string, string> = {
-      pending: 'orange',
-      processing: 'blue',
-      completed: 'green',
-      cancelled: 'red'
     };
-    return colorMap[status] || 'default';
-  };
+
+    fetchData();
+  }, []);
 
   const columns = [
     {
       title: '订单编号',
       dataIndex: 'order_no',
       key: 'order_no',
+    },
+    {
+      title: '商店名称',
+      dataIndex: 'store_name',
+      key: 'store_name',
+    },
+    {
+      title: '商店地址',
+      dataIndex: 'store_address',
+      key: 'store_address',
     },
     {
       title: '商品名称',
@@ -97,77 +70,96 @@ const SupplierDashboard: React.FC = () => {
       title: '总金额',
       dataIndex: 'total_amount',
       key: 'total_amount',
-      render: (amount: number) => `¥${amount.toFixed(2)}`
+      render: (amount: number) => `¥${amount.toFixed(2)}`,
     },
     {
-      title: '订单状态',
+      title: '状态',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => (
-        <Tag color={getStatusColor(status)}>{status}</Tag>
-      )
+      render: (status: string) => {
+        const statusMap: { [key: string]: string } = {
+          pending: '待处理',
+          processing: '处理中',
+          shipping: '配送中',
+          completed: '已完成',
+          cancelled: '已取消',
+        };
+        return statusMap[status] || status;
+      },
     },
     {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (date: string) => new Date(date).toLocaleString()
-    }
+      render: (date: string) => formatDateTime(date),
+    },
   ];
 
   return (
-    <div>
-      <Title level={2}>供应商主页</Title>
-      <Row gutter={16}>
-        <Col span={8}>
-          <Card loading={loading}>
+    <div style={{ padding: '24px' }}>
+      <Title level={2}>供应商仪表盘</Title>
+      
+      <Row gutter={[16, 16]}>
+        <Col span={6}>
+          <Card>
             <Statistic
-              title="总商品数"
-              value={data.totalProducts}
+              title="商品总数"
+              value={data?.totalProducts || 0}
               prefix={<ShopOutlined />}
             />
           </Card>
         </Col>
-        <Col span={8}>
-          <Card loading={loading}>
+        <Col span={6}>
+          <Card>
             <Statistic
-              title="总收入"
-              value={data.totalRevenue}
-              prefix={<DollarOutlined />}
-              precision={2}
-              suffix="元"
+              title="订单总数"
+              value={data?.totalOrders || 0}
+              prefix={<FileOutlined />}
             />
           </Card>
         </Col>
-        <Col span={8}>
-          <Card loading={loading}>
+        <Col span={6}>
+          <Card>
             <Statistic
-              title="库存不足商品"
-              value={data.lowStockProducts}
-              prefix={<InboxOutlined />}
-              valueStyle={{ color: data.lowStockProducts > 0 ? '#cf1322' : '#3f8600' }}
+              title="待处理订单"
+              value={data?.pendingOrders || 0}
+              prefix={<FileOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="配送中订单"
+              value={data?.shippingOrders || 0}
+              prefix={<CarOutlined />}
             />
           </Card>
         </Col>
       </Row>
 
-      <Card
-        title="最近订单"
-        style={{ marginTop: 24 }}
-        loading={loading}
-      >
-        {!loading && (
-          Array.isArray(data.recentOrders) && data.recentOrders.length === 0 ? (
-            <Empty description="暂无订单数据" />
-          ) : (
-            <Table
-              columns={columns}
-              dataSource={data.recentOrders}
-              rowKey="order_no"
-              pagination={{ pageSize: 5 }}
+      <Row style={{ marginTop: '16px' }}>
+        <Col span={24}>
+          <Card>
+            <Statistic
+              title="总收入"
+              value={data?.totalRevenue || 0}
+              precision={2}
+              prefix={<DollarOutlined />}
+              suffix="¥"
             />
-          )
-        )}
+          </Card>
+        </Col>
+      </Row>
+
+      <Card style={{ marginTop: '16px' }}>
+        <Title level={3}>最近订单</Title>
+        <Table
+          columns={columns}
+          dataSource={data?.recentOrders || []}
+          rowKey="order_no"
+          pagination={false}
+        />
       </Card>
     </div>
   );

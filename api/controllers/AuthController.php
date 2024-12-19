@@ -103,4 +103,50 @@ class AuthController {
             ]);
         }
     }
+    public function register() {
+        try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            error_log('Register attempt with data: ' . print_r($data, true));
+
+            if (!isset($data['username']) || !isset($data['password'])) {
+                throw new Exception('缺少必要的注册信息');
+            }
+
+            // 检查用户名是否已存在
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM users WHERE username = ?");
+            $stmt->execute([$data['username']]);
+            $count = $stmt->fetchColumn();
+
+            if ($count > 0) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => '用户名已被注册'
+                ]);
+                return;
+            }
+
+            // 插入新用户数据
+            $stmt = $this->db->prepare("
+                INSERT INTO users (username, password, role) 
+                VALUES (?, ?, ?)
+            ");
+            $password = $data['password']; // 在生产环境下应使用密码加密：password_hash($data['password'], PASSWORD_BCRYPT)
+            $role = 'customer'; // 默认角色为客户
+
+            $stmt->execute([$data['username'], $password, $role]);
+
+            // 注册成功
+            echo json_encode([
+                'success' => true,
+                'message' => '注册成功！'
+            ]);
+        } catch (Exception $e) {
+            error_log("Register error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
 } 

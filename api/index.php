@@ -219,6 +219,21 @@ try {
                     $controller->login();
                 }
                 break;
+
+            // 注册由
+            case 'register':
+                $controller = new AuthController();
+                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                    $controller->register();
+                }
+                break;
+
+            case 'logout':
+                $controller = new AuthController();
+                if ($_SERVER['REQUEST_METHOD'] === 'POST') { // 登出通常也使用 POST 请求
+                    $controller->logout();
+                }
+                break;
                 
             // 购物车路由
             case 'cart':
@@ -278,11 +293,67 @@ try {
                         $controller->updateOrderStatus($id);
                         break;
                     default:
-                        throw new Exception('不支持的请求��法');
+                        throw new Exception('不支持的请求方法');
                 }
                 break;
     
-            // 供应商订单路由
+            // 供应商路由
+            case 'supplier/dashboard':
+                $controller = new SupplierController();
+                if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                    try {
+                        error_log('Accessing supplier dashboard');
+                        $controller->getDashboard();
+                    } catch (Exception $e) {
+                        error_log('Supplier dashboard error: ' . $e->getMessage());
+                        http_response_code(500);
+                        echo json_encode([
+                            'success' => false,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                } else {
+                    throw new Exception('不支持的请求方法');
+                }
+                break;
+
+            case 'supplier/products':
+                $controller = new SupplierController();
+                if (count($uri) > 2 && is_numeric($uri[2])) {
+                    // 处理单个产品的操作
+                    $id = (int)$uri[2];
+                    error_log('Processing product operation for ID: ' . $id . ', Method: ' . $_SERVER['REQUEST_METHOD']);
+                    switch ($_SERVER['REQUEST_METHOD']) {
+                        case 'PUT':
+                            $controller->updateProduct($id);
+                            break;
+                        case 'DELETE':
+                            try {
+                                $controller->deleteProduct($id);
+                            } catch (Exception $e) {
+                                error_log('Delete product error: ' . $e->getMessage());
+                                http_response_code(500);
+                                echo json_encode([
+                                    'success' => false,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+                            break;
+                        default:
+                            throw new Exception('不支持的请求方法');
+                    }
+                } else {
+                    // 处理产品列表的操作
+                    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                        $controller->getSupplierProducts();
+                    } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                        $controller->addProduct();
+                    } else {
+                        throw new Exception('不支持的请求方法');
+                    }
+                }
+                break;
+
             case 'supplier/orders':
                 $controller = new SupplierController();
                 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -291,43 +362,12 @@ try {
                     throw new Exception('不支持的请求方法');
                 }
                 break;
-    
-            // 供应商产品路由
-            case 'supplier/products':
+
+            case (preg_match('/^supplier\/orders\/(\w+)\/status$/', $resource, $matches) ? $resource : !$resource):
                 $controller = new SupplierController();
-                switch ($_SERVER['REQUEST_METHOD']) {
-                    case 'GET':
-                        $controller->getSupplierProducts();
-                        break;
-                    case 'POST':
-                        $controller->addProduct();
-                        break;
-                    default:
-                        throw new Exception('不支持的请求方法');
-                }
-                break;
-    
-            // 供应商单个产品管理
-            case (preg_match('/^supplier\/products\/\d+$/', $resource) ? $resource : !$resource):
-                $controller = new SupplierController();
-                $id = (int)end($uri);
-                switch ($_SERVER['REQUEST_METHOD']) {
-                    case 'PUT':
-                        $controller->updateProduct($id);
-                        break;
-                    case 'DELETE':
-                        $controller->deleteProduct($id);
-                        break;
-                    default:
-                        throw new Exception('不支持的请求方法');
-                }
-                break;
-    
-            // 供应商仪表盘路由
-            case 'supplier/dashboard':
-                $controller = new SupplierController();
-                if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-                    $controller->getDashboard();
+                $orderNo = $matches[1];
+                if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
+                    $controller->updateOrderStatus($orderNo);
                 } else {
                     throw new Exception('不支持的请求方法');
                 }
@@ -343,7 +383,7 @@ try {
                 }
                 break;
     
-            // 员工库存管理路由
+            // 员工库存管理路
             case 'employee/inventory':
                 $controller = new EmployeeController();
                 switch ($_SERVER['REQUEST_METHOD']) {

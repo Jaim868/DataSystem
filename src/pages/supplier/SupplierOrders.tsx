@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Tag, Card, DatePicker, Select, Space, Typography, message, Empty } from 'antd';
-import type { TableProps } from 'antd';
-import axios from 'axios';
+import React, { useEffect, useState } from 'react';
+import { Table, Card, Typography, Button, Space, Modal, message } from 'antd';
+import { getSupplierOrders, updateOrderStatus } from '../../api/supplier';
+import { formatDateTime } from '../../utils/dateUtils';
 
-const { RangePicker } = DatePicker;
 const { Title } = Typography;
 
 interface Order {
   order_no: string;
   store_name: string;
+  store_address: string;
   product_name: string;
   quantity: number;
   supply_price: number;
@@ -19,68 +19,98 @@ interface Order {
 
 const SupplierOrders: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [dateRange, setDateRange] = useState<[string, string] | null>(null);
-  const [status, setStatus] = useState<string>('all');
-
-  useEffect(() => {
-    fetchOrders();
-  }, [dateRange, status]);
+  const [loading, setLoading] = useState(true);
 
   const fetchOrders = async () => {
-    setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (dateRange) {
-        params.append('start_date', dateRange[0]);
-        params.append('end_date', dateRange[1]);
-      }
-      if (status !== 'all') {
-        params.append('status', status);
-      }
-
-      const response = await axios.get(`/api/supplier/orders?${params.toString()}`);
-      const { success, orders: orderData, error } = response.data;
-
-      if (success && Array.isArray(orderData)) {
-        setOrders(orderData);
-      } else {
-        console.error('获取订单失败:', error);
-        message.error(error || '获取订单数据失败');
-        setOrders([]);
-      }
-    } catch (error: any) {
+      const response = await getSupplierOrders();
+      setOrders(response.orders);
+    } catch (error) {
       console.error('获取订单失败:', error);
-      message.error(error.response?.data?.error || '获取订单列表失败');
-      setOrders([]);
+      message.error('获取订单数据失败');
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusText = (status: string) => {
-    const statusMap: Record<string, string> = {
-      pending: '待处理',
-      processing: '处理中',
-      completed: '已完成',
-      cancelled: '已取消'
-    };
-    return statusMap[status] || status;
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const handleStatusUpdate = async (orderNo: string, newStatus: string) => {
+    try {
+      await updateOrderStatus(orderNo, newStatus);
+      message.success('订单状态更新成功');
+      fetchOrders();
+    } catch (error) {
+      console.error('更新订单状态失败:', error);
+      message.error('更新订单状态失败');
+    }
   };
 
-  const columns: TableProps<Order>['columns'] = [
+  const showStatusConfirm = (orderNo: string, newStatus: string) => {
+    const statusText = {
+      processing: '开始处理',
+      shipping: '开始配送',
+      completed: '完成',
+      cancelled: '取消'
+    }[newStatus];
+
+    Modal.confirm({
+      title: '确认更新订单状态',
+      content: `确定要${statusText}这个订单吗？`,
+      onOk: () => handleStatusUpdate(orderNo, newStatus),
+      okText: '确认',
+      cancelText: '取消'
+    });
+  };
+
+  const getStatusActions = (status: string, orderNo: string) => {
+    switch (status) {
+      case 'pending':
+        return [
+          <Button key="process" type="primary" onClick={() => showStatusConfirm(orderNo, 'processing')}>
+            开始处理
+          </Button>,
+          <Button key="cancel" danger onClick={() => showStatusConfirm(orderNo, 'cancelled')}>
+            取消订单
+          </Button>
+        ];
+      case 'processing':
+        return [
+          <Button key="ship" type="primary" onClick={() => showStatusConfirm(orderNo, 'shipping')}>
+            开始配送
+          </Button>
+        ];
+      case 'shipping':
+        return [
+          <Button key="complete" type="primary" onClick={() => showStatusConfirm(orderNo, 'completed')}>
+            完成订单
+          </Button>
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const columns = [
     {
       title: '订单编号',
       dataIndex: 'order_no',
       key: 'order_no',
     },
     {
-      title: '商店',
+      title: '商店名称',
       dataIndex: 'store_name',
       key: 'store_name',
     },
     {
-      title: '商品',
+      title: '商店地址',
+      dataIndex: 'store_address',
+      key: 'store_address',
+    },
+    {
+      title: '商品名称',
       dataIndex: 'product_name',
       key: 'product_name',
     },
@@ -93,75 +123,57 @@ const SupplierOrders: React.FC = () => {
       title: '供应价格',
       dataIndex: 'supply_price',
       key: 'supply_price',
-      render: (price: number) => `¥${Number(price).toFixed(2)}`,
+      render: (price: number) => `¥${price.toFixed(2)}`,
     },
     {
       title: '总金额',
       dataIndex: 'total_amount',
       key: 'total_amount',
-      render: (amount: number) => `¥${Number(amount).toFixed(2)}`,
+      render: (amount: number) => `¥${amount.toFixed(2)}`,
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => {
-        const colorMap: Record<string, string> = {
-          pending: 'orange',
-          processing: 'blue',
-          completed: 'green',
-          cancelled: 'red',
+        const statusMap: { [key: string]: string } = {
+          pending: '待处理',
+          processing: '处理中',
+          shipping: '配送中',
+          completed: '已完成',
+          cancelled: '已取消',
         };
-        return <Tag color={colorMap[status] || 'default'}>{getStatusText(status)}</Tag>;
+        return statusMap[status] || status;
       },
     },
     {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string) => formatDateTime(date),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_: any, record: Order) => (
+        <Space size="small">
+          {getStatusActions(record.status, record.order_no)}
+        </Space>
+      ),
     },
   ];
 
   return (
-    <div>
-      <Title level={2}>供应订单管理</Title>
-      
-      <Card style={{ marginBottom: 16 }}>
-        <Space size="large">
-          <RangePicker
-            onChange={(_, dateStrings) => setDateRange(dateStrings as [string, string])}
-          />
-          <Select
-            defaultValue="all"
-            style={{ width: 120 }}
-            onChange={setStatus}
-            options={[
-              { value: 'all', label: '全部状态' },
-              { value: 'pending', label: '待处理' },
-              { value: 'processing', label: '处理中' },
-              { value: 'completed', label: '已完成' },
-              { value: 'cancelled', label: '已取消' },
-            ]}
-          />
-        </Space>
-      </Card>
-
-      {loading ? (
-        <Card loading={true} />
-      ) : orders.length === 0 ? (
-        <Card>
-          <Empty description="暂无订单数据" />
-        </Card>
-      ) : (
+    <div style={{ padding: '24px' }}>
+      <Card>
+        <Title level={2}>供应订单管理</Title>
         <Table
           columns={columns}
           dataSource={orders}
           rowKey="order_no"
           loading={loading}
-          pagination={{ pageSize: 10 }}
         />
-      )}
+      </Card>
     </div>
   );
 };
