@@ -13,8 +13,8 @@ import {
   Upload,
   Select
 } from 'antd';
-import { PlusOutlined, UploadOutlined } from '@ant-design/icons';
-import { getSupplierProducts, addProduct, updateProduct } from '../../api/supplier';
+import { PlusOutlined, UploadOutlined, SendOutlined } from '@ant-design/icons';
+import { getSupplierProducts, addProduct, updateProduct, getStores, createSupplyOrder } from '../../api/supplier';
 import type { RcFile } from 'antd/es/upload/interface';
 
 const { Title } = Typography;
@@ -31,12 +31,23 @@ interface Product {
   supply_price: number;
 }
 
+interface Store {
+  id: number;
+  name: string;
+  address: string;
+  phone: string;
+}
+
 const SupplierProducts: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [supplyModalVisible, setSupplyModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [form] = Form.useForm();
+  const [supplyForm] = Form.useForm();
   const [imageFile, setImageFile] = useState<RcFile | null>(null);
 
   const fetchProducts = async () => {
@@ -51,8 +62,19 @@ const SupplierProducts: React.FC = () => {
     }
   };
 
+  const fetchStores = async () => {
+    try {
+      const response = await getStores();
+      setStores(response.stores);
+    } catch (error) {
+      console.error('获取商店列表失败:', error);
+      message.error('获取商店数据失败');
+    }
+  };
+
   useEffect(() => {
     fetchProducts();
+    fetchStores();
   }, []);
 
   const handleModalOk = async () => {
@@ -85,6 +107,41 @@ const SupplierProducts: React.FC = () => {
     }
   };
 
+  const handleSupplyModalOk = async () => {
+    try {
+      const values = await supplyForm.validateFields();
+      if (!selectedProduct) {
+        throw new Error('未选择商品');
+      }
+
+      console.log('Creating supply order with data:', {
+        store_id: values.store_id,
+        items: [{
+          product_id: selectedProduct.id,
+          quantity: values.quantity,
+          supply_price: selectedProduct.supply_price
+        }]
+      });
+
+      await createSupplyOrder({
+        store_id: values.store_id,
+        items: [{
+          product_id: selectedProduct.id,
+          quantity: values.quantity,
+          supply_price: selectedProduct.supply_price
+        }]
+      });
+
+      message.success('供应订单创建成功');
+      setSupplyModalVisible(false);
+      supplyForm.resetFields();
+      setSelectedProduct(null);
+    } catch (error: any) {
+      console.error('创建供应订单失败:', error);
+      message.error(error.response?.data?.error || '创建供应订单失败');
+    }
+  };
+
   const handleEdit = (record: Product) => {
     setEditingProduct(record);
     form.setFieldsValue({
@@ -95,6 +152,11 @@ const SupplierProducts: React.FC = () => {
       supply_price: record.supply_price,
     });
     setModalVisible(true);
+  };
+
+  const handleSupply = (record: Product) => {
+    setSelectedProduct(record);
+    setSupplyModalVisible(true);
   };
 
   const handleAdd = () => {
@@ -139,6 +201,9 @@ const SupplierProducts: React.FC = () => {
         <Space size="small">
           <Button type="primary" onClick={() => handleEdit(record)}>
             编辑
+          </Button>
+          <Button type="primary" icon={<SendOutlined />} onClick={() => handleSupply(record)}>
+            发货
           </Button>
         </Space>
       ),
@@ -247,6 +312,54 @@ const SupplierProducts: React.FC = () => {
                 <Button icon={<UploadOutlined />}>选择图片</Button>
               </Upload>
             </Form.Item>
+          </Form>
+        </Modal>
+
+        <Modal
+          title="发货"
+          open={supplyModalVisible}
+          onOk={handleSupplyModalOk}
+          onCancel={() => {
+            setSupplyModalVisible(false);
+            supplyForm.resetFields();
+            setSelectedProduct(null);
+          }}
+        >
+          <Form
+            form={supplyForm}
+            layout="vertical"
+          >
+            <Form.Item
+              name="store_id"
+              label="选择商店"
+              rules={[{ required: true, message: '请选择商店' }]}
+            >
+              <Select>
+                {stores.map(store => (
+                  <Option key={store.id} value={store.id}>
+                    {store.name} ({store.address})
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="quantity"
+              label="发货数量"
+              rules={[{ required: true, message: '请输入发货数量' }]}
+            >
+              <InputNumber
+                min={1}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+
+            {selectedProduct && (
+              <div>
+                <p>商品名称：{selectedProduct.name}</p>
+                <p>供应价格：¥{selectedProduct.supply_price.toFixed(2)}</p>
+              </div>
+            )}
           </Form>
         </Modal>
       </Card>

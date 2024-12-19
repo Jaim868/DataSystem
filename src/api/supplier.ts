@@ -54,4 +54,31 @@ export const updateOrderStatus = async (orderNo: string, status: string) => {
     return response.data;
   }
   throw new Error(response.data.error || '更新订单状态失败');
+};
+
+export const getStores = async () => {
+  const response = await axios.get('/api/supplier/stores');
+  if (response.data.success) {
+    return response.data;
+  }
+  throw new Error(response.data.error || '获取商店列表失败');
+};
+
+interface SupplyOrderItem {
+  product_id: number;
+  quantity: number;
+  supply_price: number;
+}
+
+interface SupplyOrderData {
+  store_id: number;
+  items: SupplyOrderItem[];
+}
+
+export const createSupplyOrder = async (data: SupplyOrderData) => {
+  const response = await axios.post('/api/supplier/supply-orders', data);
+  if (response.data.success) {
+    return response.data;
+  }
+  throw new Error(response.data.error || '创建供应订单失败');
 }; 

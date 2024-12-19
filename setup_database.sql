@@ -135,9 +135,9 @@ CREATE TABLE order_items (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
--- 创建供应订单表（商店向供应商下单）
+-- 创建供应订单表（供应商发货给商店的订单）
 CREATE TABLE supply_orders (
-    order_no VARCHAR(20) PRIMARY KEY,
+    order_no VARCHAR(50) PRIMARY KEY,
     supplier_id INT NOT NULL,
     store_id INT NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL,
@@ -151,7 +151,7 @@ CREATE TABLE supply_orders (
 -- 创建供应订单项目表
 CREATE TABLE supply_order_items (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    order_no VARCHAR(20) NOT NULL,
+    order_no VARCHAR(50) NOT NULL,
     product_id INT NOT NULL,
     quantity INT NOT NULL,
     supply_price DECIMAL(10,2) NOT NULL,
@@ -269,7 +269,7 @@ INSERT INTO supply_order_items (order_no, product_id, quantity, supply_price) VA
 ('SUP202301005', 2, 2, 80.00),
 ('SUP202301005', 3, 5, 45.00);
 
--- 删除原有���订单相关视图
+-- 删除原有的订单相关视图
 
 
 -- 创建综合订单视图
@@ -435,7 +435,7 @@ FROM (
 ) p
 LEFT JOIN cart_items ci ON p.id = ci.product_id;
 
--- 删除原有的员工相关视图
+-- 删除原有���员工相关视图
 DROP VIEW IF EXISTS employee_orders_view;
 DROP VIEW IF EXISTS employee_inventory_view;
 DROP VIEW IF EXISTS employee_info_view;

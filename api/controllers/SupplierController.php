@@ -17,6 +17,7 @@ class SupplierController {
             throw new Exception('用户未登录');
         }
 
+        // 检查用户角色
         $stmt = $this->db->prepare("
             SELECT role FROM users 
             WHERE id = ? AND role = 'supplier'
@@ -24,6 +25,28 @@ class SupplierController {
         $stmt->execute([$userId]);
         if (!$stmt->fetch()) {
             throw new Exception('非供应商用户');
+        }
+
+        // 检查供应商记录是否存在
+        $stmt = $this->db->prepare("
+            SELECT id FROM suppliers 
+            WHERE id = ?
+        ");
+        $stmt->execute([$userId]);
+        if (!$stmt->fetch()) {
+            // 如果供应商记录不存在，则创建一个
+            $stmt = $this->db->prepare("
+                INSERT INTO suppliers (id, company_name, contact_name, phone, address)
+                SELECT 
+                    id,
+                    username as company_name,
+                    username as contact_name,
+                    phone,
+                    '' as address
+                FROM users
+                WHERE id = ?
+            ");
+            $stmt->execute([$userId]);
         }
 
         return $userId;
@@ -201,7 +224,7 @@ class SupplierController {
             error_log('Transaction started');
 
             try {
-                // 检查商品是否存在且属于该供应商
+                // 检查商品是否存在且属于供应商
                 $stmt = $this->db->prepare("
                     SELECT COUNT(*) FROM supplier_products sp
                     JOIN products p ON sp.product_id = p.id
@@ -458,6 +481,148 @@ class SupplierController {
             ];
 
             echo json_encode($response);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function createSupplyOrder() {
+        try {
+            error_log('Starting createSupplyOrder method');
+            $userId = $this->checkSupplierAuth();
+            error_log('User authenticated: ' . $userId);
+
+            $rawData = file_get_contents('php://input');
+            error_log('Received data: ' . $rawData);
+            $data = json_decode($rawData, true);
+
+            if (!isset($data['store_id']) || !isset($data['items']) || empty($data['items'])) {
+                error_log('Missing required fields: ' . json_encode($data));
+                throw new Exception('缺少必要的字段');
+            }
+
+            error_log('Validating store_id: ' . $data['store_id']);
+            // 验证商店是否存在
+            $stmt = $this->db->prepare("SELECT id FROM stores WHERE id = ?");
+            $stmt->execute([$data['store_id']]);
+            if (!$stmt->fetch()) {
+                error_log('Store not found: ' . $data['store_id']);
+                throw new Exception('商店不存在');
+            }
+
+            $this->db->beginTransaction();
+            error_log('Transaction started');
+
+            try {
+                // 生成供应订单编号：SUPPLY + 年月日时分秒 + 4位随机数 + 供应商ID
+                $orderNo = 'SUPPLY' . date('YmdHis') . rand(1000, 9999) . '_' . $userId;
+                error_log('Generated order number: ' . $orderNo);
+
+                // 验证商品并计算总金额
+                $totalAmount = 0;
+                foreach ($data['items'] as $item) {
+                    // 验证商品是否属于该供应商
+                    $stmt = $this->db->prepare("
+                        SELECT supply_price 
+                        FROM supplier_products 
+                        WHERE supplier_id = ? AND product_id = ?
+                    ");
+                    $stmt->execute([$userId, $item['product_id']]);
+                    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if (!$result) {
+                        error_log('Product not found or not owned by supplier: ' . $item['product_id']);
+                        throw new Exception('商品不存在或不属于该供应商');
+                    }
+
+                    $totalAmount += $item['quantity'] * $result['supply_price'];
+                }
+
+                error_log('Total amount calculated: ' . $totalAmount);
+
+                // 创建供应订单
+                $stmt = $this->db->prepare("
+                    INSERT INTO supply_orders (
+                        order_no, supplier_id, store_id, 
+                        total_amount, status, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, 'pending', NOW(), NOW())
+                ");
+                $stmt->execute([
+                    $orderNo,
+                    $userId,
+                    $data['store_id'],
+                    $totalAmount
+                ]);
+
+                error_log('Supply order created');
+
+                // 添加订单项目
+                $stmt = $this->db->prepare("
+                    INSERT INTO supply_order_items (
+                        order_no, product_id, quantity, supply_price
+                    ) VALUES (?, ?, ?, ?)
+                ");
+
+                foreach ($data['items'] as $item) {
+                    $stmt->execute([
+                        $orderNo,
+                        $item['product_id'],
+                        $item['quantity'],
+                        $result['supply_price'] // 使用从数据库查询到的供应价格
+                    ]);
+                    error_log('Added order item: ' . json_encode($item));
+                }
+
+                $this->db->commit();
+                error_log('Transaction committed successfully');
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => '供应订单创建成功',
+                    'order_no' => $orderNo
+                ]);
+            } catch (Exception $e) {
+                error_log('Error in transaction: ' . $e->getMessage());
+                error_log('Stack trace: ' . $e->getTraceAsString());
+                $this->db->rollBack();
+                throw $e;
+            }
+        } catch (Exception $e) {
+            error_log('Error in createSupplyOrder: ' . $e->getMessage());
+            error_log('Stack trace: ' . $e->getTraceAsString());
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function getStores() {
+        try {
+            $userId = $this->checkSupplierAuth();
+
+            $stmt = $this->db->prepare("
+                SELECT 
+                    s.id,
+                    s.name,
+                    s.address,
+                    s.phone
+                FROM stores s
+                ORDER BY s.name
+            ");
+            
+            $stmt->execute();
+            $stores = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            echo json_encode([
+                'success' => true,
+                'stores' => $stores
+            ]);
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode([

@@ -317,6 +317,24 @@ try {
                 }
                 break;
 
+            case 'supplier/stores':
+                $controller = new SupplierController();
+                if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                    $controller->getStores();
+                } else {
+                    throw new Exception('不支持的请求方法');
+                }
+                break;
+
+            case 'supplier/supply-orders':
+                $controller = new SupplierController();
+                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                    $controller->createSupplyOrder();
+                } else {
+                    throw new Exception('不支持的请求方法');
+                }
+                break;
+
             case 'supplier/products':
                 $controller = new SupplierController();
                 if (count($uri) > 2 && is_numeric($uri[2])) {
