@@ -54,94 +54,6 @@ const Home: React.FC = () => {
     { name: '服饰', icon: <SearchOutlined />, category: '服饰' }
   ], []);
 
-  // 获取商品列表
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      let url = '/api/products';
-      if (selectedStore) {
-        url += `?store_id=${selectedStore}`;
-      }
-      
-      const response = await axios.get(url);
-      if (Array.isArray(response.data)) {
-        setProducts(response.data);
-      } else if (response.data.data && Array.isArray(response.data.data)) {
-        setProducts(response.data.data);
-      } else {
-        setProducts([]);
-      }
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      message.error('获取商品列表失败');
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 获取商店列表
-  const fetchStores = async () => {
-    try {
-      const response = await axios.get('/api/stores');
-      if (Array.isArray(response.data)) {
-        setStores(response.data);
-      } else {
-        setStores([]);
-        message.error('获取商店列表失败');
-      }
-    } catch (error) {
-      console.error('Error fetching stores:', error);
-      message.error('获取商店列表失败');
-      setStores([]);
-    }
-  };
-
-  // 初始化数据
-  useEffect(() => {
-    fetchStores();
-  }, []);
-
-  useEffect(() => {
-    fetchProducts();
-  }, [selectedStore]);
-
-  // 处理搜索
-  const handleSearch = (value: string) => {
-    setSearchText(value);
-    if (value.trim()) {
-      // 如果有搜索内容，过滤商品
-      const searchLower = value.toLowerCase().trim();
-      const searchResults = products.filter(product => {
-        const nameMatch = product.name.toLowerCase().includes(searchLower);
-        const descriptionMatch = product.description.toLowerCase().includes(searchLower);
-        return nameMatch || descriptionMatch;
-      });
-      setProducts(searchResults);
-    } else {
-      // 如果搜索框清空，重新获取所有商品
-      fetchProducts();
-    }
-    setSelectedCategory('');
-  };
-
-  // 处理分类选择
-  const handleCategoryClick = (category: string) => {
-    if (category === selectedCategory) {
-      setSelectedCategory('');
-    } else {
-      setSelectedCategory(category);
-      setSearchText('');
-    }
-  };
-
-  // 处理商店选择
-  const handleStoreChange = (value: number | null) => {
-    setSelectedStore(value);
-    setSearchText('');
-    setSelectedCategory('');
-  };
-
   // 使用 useMemo 优化筛选逻辑
   const filteredProducts = useMemo(() => {
     if (loading) return [];
@@ -168,6 +80,107 @@ const Home: React.FC = () => {
 
     return filtered;
   }, [products, selectedCategory, loading, categories]);
+
+  // 获取商品列表
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      let url = '/api/products';
+      const params = new URLSearchParams();
+      
+      if (selectedStore) {
+        params.append('store_id', selectedStore.toString());
+      }
+      
+      if (selectedCategory) {
+        const category = categories.find(cat => cat.name === selectedCategory);
+        if (category) {
+          if ('categories' in category && category.categories) {
+            // 如果是渔具分类，传递子分类列表
+            category.categories.forEach(cat => params.append('categories[]', cat));
+          } else if ('category' in category) {
+            // 其他分类直接传递
+            params.append('category', category.category);
+          }
+        }
+      }
+
+      const queryString = params.toString();
+      if (queryString) {
+        url += `?${queryString}`;
+      }
+      
+      const response = await axios.get(url);
+      console.log('Products Response:', response.data); // 添加调试日志
+      
+      // 直接使用响应数据，不再进行额外的前端筛选
+      setProducts(response.data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      message.error('获取商品列表失败');
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 获取商店列表
+  const fetchStores = async () => {
+    try {
+      const response = await axios.get('/api/stores');
+      console.log('Stores Response:', response.data); // 添加调试日志
+      setStores(response.data || []);
+    } catch (error) {
+      console.error('Error fetching stores:', error);
+      message.error('获取商店列表失败');
+      setStores([]);
+    }
+  };
+
+  // 初始化数据
+  useEffect(() => {
+    fetchStores();
+    fetchProducts();
+  }, []);
+
+  // 处理搜索
+  const handleSearch = (value: string) => {
+    setSearchText(value);
+    if (value.trim()) {
+      // 如果有搜索内容，过滤商品
+      const searchLower = value.toLowerCase().trim();
+      const searchResults = products.filter(product => {
+        const nameMatch = product.name.toLowerCase().includes(searchLower);
+        const descriptionMatch = product.description.toLowerCase().includes(searchLower);
+        return nameMatch || descriptionMatch;
+      });
+      setProducts(searchResults);
+    } else {
+      // 如果搜索框清空，重新获取所有商品
+      fetchProducts();
+    }
+    setSelectedCategory('');
+  };
+
+  // 处理分类选择
+  const handleCategoryClick = (category: string) => {
+    if (category === selectedCategory) {
+      setSelectedCategory('');
+      fetchProducts();
+    } else {
+      setSelectedCategory(category);
+      setSearchText('');
+      fetchProducts();
+    }
+  };
+
+  // 处理商店选择
+  const handleStoreChange = (value: number | null) => {
+    setSelectedStore(value);
+    setSearchText('');
+    setSelectedCategory('');
+    fetchProducts();
+  };
 
   // 渲染商店选择器
   const renderStoreSelector = () => (

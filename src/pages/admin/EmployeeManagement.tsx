@@ -79,8 +79,13 @@ const EmployeeManagement: React.FC = () => {
 
   const handleSubmit = async (values: any) => {
     try {
+      const formData = {
+        ...values,
+        hire_date: values.hire_date ? values.hire_date.format('YYYY-MM-DD') : undefined
+      };
+
       if (editingEmployee) {
-        const response = await axios.put(`/api/admin/employees/${editingEmployee.id}`, values);
+        const response = await axios.put(`/api/admin/employees/${editingEmployee.id}`, formData);
         if (response.data.success) {
           message.success('员工信息更新成功');
           setModalVisible(false);
@@ -90,7 +95,28 @@ const EmployeeManagement: React.FC = () => {
           message.error(response.data.error || '更新失败');
         }
       } else {
-        const response = await axios.post('/api/admin/employees', values);
+        if (!formData.password) {
+          message.error('请输入密码');
+          return;
+        }
+        
+        const requiredFields = {
+          username: '用户名',
+          password: '密码',
+          store_id: '所属商店',
+          position: '职位',
+          salary: '薪资',
+          hire_date: '入职日期'
+        };
+
+        for (const [field, label] of Object.entries(requiredFields)) {
+          if (!formData[field]) {
+            message.error(`请输入${label}`);
+            return;
+          }
+        }
+
+        const response = await axios.post('/api/admin/employees', formData);
         if (response.data.success) {
           message.success('员工添加成功');
           setModalVisible(false);

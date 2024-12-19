@@ -12,7 +12,6 @@ import {
 } from '@ant-design/icons';
 import EmployeeManagement from '../pages/admin/EmployeeManagement';
 import OrderManagement from '../pages/admin/OrderManagement';
-import InventoryManagement from '../pages/admin/InventoryManagement';
 import ProductManagement from '../pages/admin/ProductManagement';
 import StoreManagement from '../pages/admin/StoreManagement';
 import Dashboard from '../pages/admin/Dashboard';
@@ -53,9 +52,6 @@ const AdminLayout: React.FC = () => {
             <Menu.Item key="products" icon={<ShopOutlined />}>
               <Link to="/admin/products">商品管理</Link>
             </Menu.Item>
-            <Menu.Item key="inventory" icon={<InboxOutlined />}>
-              <Link to="/admin/inventory">库存管理</Link>
-            </Menu.Item>
           </Menu>
         </Sider>
         <Content style={{ padding: '24px', minHeight: 280 }}>
@@ -66,7 +62,6 @@ const AdminLayout: React.FC = () => {
             <Route path="/employees" element={<EmployeeManagement />} />
             <Route path="/orders" element={<OrderManagement />} />
             <Route path="/products" element={<ProductManagement />} />
-            <Route path="/inventory" element={<InventoryManagement />} />
           </Routes>
         </Content>
       </Layout>

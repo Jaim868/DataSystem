@@ -99,4 +99,68 @@ class AdminController {
             echo json_encode(['error' => '获取订单统计失败']);
         }
     }
+
+    public function addEmployee() {
+        try {
+            $this->checkAdminAuth();
+            
+            $data = json_decode(file_get_contents('php://input'), true);
+            
+            // 验证必要字段
+            $requiredFields = ['username', 'password', 'store_id', 'position', 'salary', 'hire_date'];
+            foreach ($requiredFields as $field) {
+                if (!isset($data[$field]) || empty($data[$field])) {
+                    throw new Exception("缺少必要字段: {$field}");
+                }
+            }
+
+            $this->db->beginTransaction();
+
+            try {
+                // 1. 先创建用户账号
+                $stmt = $this->db->prepare("
+                    INSERT INTO users (username, password, role, email, phone)
+                    VALUES (?, ?, 'employee', ?, ?)
+                ");
+                $stmt->execute([
+                    $data['username'],
+                    password_hash($data['password'], PASSWORD_DEFAULT), // 对密码进行哈希处理
+                    $data['email'] ?? null,
+                    $data['phone'] ?? null
+                ]);
+                
+                $userId = $this->db->lastInsertId(); // 获取新创建的用户ID
+                
+                // 2. 使用相同的ID创建员工记录
+                $stmt = $this->db->prepare("
+                    INSERT INTO employees (id, store_id, hire_date, salary, position)
+                    VALUES (?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([
+                    $userId,
+                    $data['store_id'],
+                    $data['hire_date'],
+                    $data['salary'],
+                    $data['position']
+                ]);
+
+                $this->db->commit();
+                
+                echo json_encode([
+                    'success' => true,
+                    'message' => '员工添加成功',
+                    'id' => $userId
+                ]);
+            } catch (Exception $e) {
+                $this->db->rollBack();
+                throw $e;
+            }
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
 } 
