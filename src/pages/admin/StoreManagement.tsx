@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Space, Card, Row, Col, Statistic } from 'antd';
+import { Table, Button, Modal, Form, Input, message, Space, Card, Row, Col, Statistic, Popconfirm } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ShopOutlined, TeamOutlined, ShoppingOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
@@ -10,7 +10,8 @@ interface Store {
   phone: string;
   employee_count: number;
   product_count: number;
-  monthly_sales: number;
+  total_sales: number;
+  order_count: number;
 }
 
 const StoreManagement: React.FC = () => {
@@ -28,7 +29,11 @@ const StoreManagement: React.FC = () => {
     setLoading(true);
     try {
       const response = await axios.get('/api/admin/stores');
-      setStores(response.data);
+      if (response.data.success) {
+        setStores(response.data.stores);
+      } else {
+        message.error(response.data.error || '获取商店列表失败');
+      }
     } catch (error) {
       message.error('获取商店列表失败');
     } finally {
@@ -39,27 +44,39 @@ const StoreManagement: React.FC = () => {
   const handleSubmit = async (values: any) => {
     try {
       if (editingStore) {
-        await axios.put(`/api/admin/stores/${editingStore.id}`, values);
-        message.success('商店更新成功');
+        const response = await axios.put(`/api/admin/stores/${editingStore.id}`, values);
+        if (response.data.success) {
+          message.success('商店更新成功');
+        } else {
+          throw new Error(response.data.error);
+        }
       } else {
-        await axios.post('/api/admin/stores', values);
-        message.success('商店添加成功');
+        const response = await axios.post('/api/admin/stores', values);
+        if (response.data.success) {
+          message.success('商店添加成功');
+        } else {
+          throw new Error(response.data.error);
+        }
       }
       setModalVisible(false);
       form.resetFields();
       fetchStores();
-    } catch (error) {
-      message.error('操作失败');
+    } catch (error: any) {
+      message.error(error.message || '操作失败');
     }
   };
 
   const handleDelete = async (id: number) => {
     try {
-      await axios.delete(`/api/admin/stores/${id}`);
-      message.success('商店删除成功');
-      fetchStores();
-    } catch (error) {
-      message.error('删除失败');
+      const response = await axios.delete(`/api/admin/stores/${id}`);
+      if (response.data.success) {
+        message.success('商店删除成功');
+        fetchStores();
+      } else {
+        throw new Error(response.data.error);
+      }
+    } catch (error: any) {
+      message.error(error.message || '删除失败');
     }
   };
 
@@ -90,9 +107,14 @@ const StoreManagement: React.FC = () => {
       key: 'product_count',
     },
     {
-      title: '月销售额',
-      dataIndex: 'monthly_sales',
-      key: 'monthly_sales',
+      title: '订单数量',
+      dataIndex: 'order_count',
+      key: 'order_count',
+    },
+    {
+      title: '总销售额',
+      dataIndex: 'total_sales',
+      key: 'total_sales',
       render: (amount: number) => `¥${amount.toFixed(2)}`,
     },
     {
@@ -111,14 +133,20 @@ const StoreManagement: React.FC = () => {
           >
             编辑
           </Button>
-          <Button
-            type="primary"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record.id)}
+          <Popconfirm
+            title="确定要删除这个商店吗？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确定"
+            cancelText="取消"
           >
-            删除
-          </Button>
+            <Button
+              type="primary"
+              danger
+              icon={<DeleteOutlined />}
+            >
+              删除
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -127,7 +155,7 @@ const StoreManagement: React.FC = () => {
   const stats = {
     totalStores: stores.length,
     totalEmployees: stores.reduce((acc, store) => acc + store.employee_count, 0),
-    totalSales: stores.reduce((acc, store) => acc + store.monthly_sales, 0),
+    totalSales: stores.reduce((acc, store) => acc + store.total_sales, 0),
   };
 
   return (
@@ -154,7 +182,7 @@ const StoreManagement: React.FC = () => {
         <Col span={8}>
           <Card>
             <Statistic
-              title="总月销售额"
+              title="总销售额"
               value={stats.totalSales}
               prefix={<ShoppingOutlined />}
               precision={2}
@@ -187,7 +215,10 @@ const StoreManagement: React.FC = () => {
       <Modal
         title={editingStore ? '编辑商店' : '添加商店'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => {
+          setModalVisible(false);
+          form.resetFields();
+        }}
         footer={null}
       >
         <Form
@@ -214,7 +245,10 @@ const StoreManagement: React.FC = () => {
           <Form.Item
             name="phone"
             label="联系电话"
-            rules={[{ required: true, message: '请输入联系电话' }]}
+            rules={[
+              { required: true, message: '请输入联系电话' },
+              { pattern: /^1[3-9]\d{9}$/, message: '请输入有效的手机号码' }
+            ]}
           >
             <Input />
           </Form.Item>

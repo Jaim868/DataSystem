@@ -57,7 +57,7 @@ const ProductManagement: React.FC = () => {
       Object.keys(values).forEach(key => {
         // 跳过图片字段和空值
         if (key !== 'image' && values[key] !== undefined && values[key] !== null) {
-          formData.append(key, typeof values[key] === 'number' ? values[key].toString() : values[key]);
+          formData.append(key, values[key].toString());
         }
       });
 
@@ -66,44 +66,35 @@ const ProductManagement: React.FC = () => {
         formData.append('image', values.image[0].originFileObj);
       }
 
+      let response;
       if (editingProduct) {
         // 编辑商品 - 使用POST方法，添加_method字段来模拟PUT
         formData.append('_method', 'PUT');
-        const response = await axios.post(`/api/admin/products/${editingProduct.id}`, formData, {
+        response = await axios.post(`/api/admin/products/${editingProduct.id}`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
         });
-        
-        if (response.data.success) {
-          message.success('商品更新成功');
-          setModalVisible(false);
-          form.resetFields();
-          fetchProducts();
-        } else {
-          throw new Error(response.data.message || '更新失败');
-        }
       } else {
         // 添加商品
-        const response = await axios.post('/api/admin/products', formData, {
+        response = await axios.post('/api/admin/products', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
         });
-        
-        if (response.data.success) {
-          message.success('商品添加成功');
-          setModalVisible(false);
-          form.resetFields();
-          fetchProducts();
-        } else {
-          throw new Error(response.data.message || '添加失败');
-        }
       }
-    } catch (error: unknown) {
+      
+      if (response.data.success) {
+        message.success(response.data.message || (editingProduct ? '商品更新成功' : '商品添加成功'));
+        setModalVisible(false);
+        form.resetFields();
+        fetchProducts();
+      } else {
+        throw new Error(response.data.message || response.data.error || '操作失败');
+      }
+    } catch (error: any) {
       console.error('操作失败:', error);
-      const err = error as ApiError;
-      message.error(err.message || '操作失败');
+      message.error(error.response?.data?.message || error.message || '操作失败');
     }
   };
 

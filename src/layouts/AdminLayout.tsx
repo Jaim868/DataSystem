@@ -7,12 +7,14 @@ import {
   InboxOutlined,
   ShopOutlined,
   DashboardOutlined,
-  LogoutOutlined
+  LogoutOutlined,
+  ShoppingOutlined
 } from '@ant-design/icons';
 import EmployeeManagement from '../pages/admin/EmployeeManagement';
 import OrderManagement from '../pages/admin/OrderManagement';
 import InventoryManagement from '../pages/admin/InventoryManagement';
 import ProductManagement from '../pages/admin/ProductManagement';
+import StoreManagement from '../pages/admin/StoreManagement';
 import Dashboard from '../pages/admin/Dashboard';
 
 const { Header, Sider, Content } = Layout;
@@ -39,6 +41,9 @@ const AdminLayout: React.FC = () => {
             <Menu.Item key="dashboard" icon={<DashboardOutlined />}>
               <Link to="/admin/dashboard">仪表盘</Link>
             </Menu.Item>
+            <Menu.Item key="stores" icon={<ShoppingOutlined />}>
+              <Link to="/admin/stores">商店管理</Link>
+            </Menu.Item>
             <Menu.Item key="employees" icon={<TeamOutlined />}>
               <Link to="/admin/employees">员工管理</Link>
             </Menu.Item>
@@ -57,6 +62,7 @@ const AdminLayout: React.FC = () => {
           <Routes>
             <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/stores" element={<StoreManagement />} />
             <Route path="/employees" element={<EmployeeManagement />} />
             <Route path="/orders" element={<OrderManagement />} />
             <Route path="/products" element={<ProductManagement />} />

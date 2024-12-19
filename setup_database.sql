@@ -385,7 +385,9 @@ SELECT
     ci.quantity as cart_quantity,
     ci.created_at,
     ci.updated_at
-FROM products p
+FROM (
+    SELECT * FROM products WHERE deleted_at IS NULL
+) p
 LEFT JOIN cart_items ci ON p.id = ci.product_id;
 
 -- 删除原有的员工相关视图
@@ -395,76 +397,82 @@ DROP VIEW IF EXISTS employee_info_view;
 
 -- 创建综合员工视图
 CREATE OR REPLACE VIEW employee_comprehensive_view AS
-WITH employee_base AS (
-    SELECT 
-        u.id,
-        u.username,
-        u.email,
-        u.role,
-        u.created_at as user_created_at,
-        u.updated_at as user_updated_at,
-        e.store_id,
-        s.name as store_name,
-        e.position
-    FROM users u
-    LEFT JOIN employees e ON u.id = e.id
-    LEFT JOIN stores s ON e.store_id = s.id
-    WHERE u.role = 'employee'
-),
-inventory_info AS (
+WITH product_info AS (
     SELECT 
         si.store_id,
         p.id as product_id,
         p.name as product_name,
         p.description,
-        CAST(p.price AS DECIMAL(10,2)) as price,
-        si.quantity as stock,
+        p.price,
         p.category,
-        si.updated_at as inventory_updated_at
-    FROM products p
+        si.quantity as stock
+    FROM (
+        SELECT * FROM products WHERE deleted_at IS NULL
+    ) p
     JOIN store_inventory si ON p.id = si.product_id
 ),
 order_info AS (
     SELECT 
         o.store_id,
         o.order_no,
-        CAST(o.total_amount AS DECIMAL(10,2)) as total_amount,
+        o.total_amount,
         o.status,
-        o.created_at as order_created_at,
+        o.created_at,
         u.username as customer_name,
-        GROUP_CONCAT(p.name) as products,
-        GROUP_CONCAT(oi.quantity) as quantities,
-        COUNT(DISTINCT o.order_no) as today_orders,
-        COALESCE(SUM(o.total_amount), 0) as today_sales,
-        COUNT(DISTINCT CASE WHEN o.status = 'pending' THEN o.order_no END) as pending_orders
+        GROUP_CONCAT(p.name ORDER BY oi.id) as products,
+        GROUP_CONCAT(oi.quantity ORDER BY oi.id) as quantities
     FROM orders o
-    JOIN users u ON o.user_id = u.id
-    JOIN order_items oi ON o.order_no = oi.order_no
-    JOIN products p ON oi.product_id = p.id
+    LEFT JOIN users u ON o.user_id = u.id
+    LEFT JOIN order_items oi ON o.order_no = oi.order_no
+    LEFT JOIN (
+        SELECT * FROM products WHERE deleted_at IS NULL
+    ) p ON oi.product_id = p.id
     GROUP BY o.store_id, o.order_no, o.total_amount, o.status, o.created_at, u.username
+),
+order_stats AS (
+    SELECT 
+        store_id,
+        COUNT(CASE WHEN DATE(created_at) = CURDATE() THEN 1 END) as today_orders,
+        SUM(CASE WHEN DATE(created_at) = CURDATE() THEN total_amount ELSE 0 END) as today_sales,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_orders
+    FROM orders
+    GROUP BY store_id
 )
-SELECT 
-    eb.*,
-    ii.product_id,
-    ii.product_name,
-    ii.description,
-    ii.price,
-    ii.stock,
-    ii.category,
-    ii.inventory_updated_at,
+SELECT DISTINCT
+    u.id,
+    u.username,
+    u.email,
+    u.role,
+    u.created_at as user_created_at,
+    u.updated_at as user_updated_at,
+    e.store_id,
+    s.name as store_name,
+    e.position,
+    e.hire_date,
+    e.salary,
+    COALESCE(os.today_orders, 0) as today_orders,
+    COALESCE(os.today_sales, 0) as today_sales,
+    COALESCE(os.pending_orders, 0) as pending_orders,
+    pi.product_id,
+    pi.product_name,
+    pi.description,
+    pi.price,
+    pi.stock,
+    pi.category,
     oi.order_no,
     oi.total_amount,
     oi.status as order_status,
-    oi.order_created_at,
+    oi.created_at as order_created_at,
     oi.customer_name,
     oi.products,
-    oi.quantities,
-    oi.today_orders,
-    oi.today_sales,
-    oi.pending_orders
-FROM employee_base eb
-LEFT JOIN inventory_info ii ON eb.store_id = ii.store_id
-LEFT JOIN order_info oi ON eb.store_id = oi.store_id;
+    oi.quantities
+FROM users u
+LEFT JOIN employees e ON u.id = e.id
+LEFT JOIN stores s ON e.store_id = s.id
+LEFT JOIN order_stats os ON e.store_id = os.store_id
+LEFT JOIN order_info oi ON e.store_id = oi.store_id
+LEFT JOIN product_info pi ON e.store_id = pi.store_id
+WHERE u.role = 'employee';
 
 -- 创建综合产品视图
 CREATE OR REPLACE VIEW product_comprehensive_view AS
@@ -478,6 +486,7 @@ SELECT
     p.stock as total_stock,
     p.rating,
     p.sales,
+    p.deleted_at,
     si.store_id,
     s.name as store_name,
     si.quantity as store_quantity,
@@ -486,8 +495,14 @@ SELECT
     sup.contact_name as supplier_contact,
     sup.phone as supplier_phone,
     sup.address as supplier_address
-FROM products p
-LEFT JOIN store_inventory si ON p.id = si.product_id
+FROM (
+    SELECT * FROM products WHERE deleted_at IS NULL
+) p
+LEFT JOIN (
+    SELECT product_id, store_id, SUM(quantity) as quantity
+    FROM store_inventory
+    GROUP BY product_id, store_id
+) si ON p.id = si.product_id
 LEFT JOIN stores s ON si.store_id = s.id
 LEFT JOIN supplier_products sp ON p.id = sp.product_id
 LEFT JOIN suppliers sup ON sp.supplier_id = sup.id;
@@ -498,7 +513,9 @@ WITH store_inventory_info AS (
     SELECT 
         p.id as product_id,
         GROUP_CONCAT(CONCAT(s.name, ':', si.quantity) SEPARATOR ';') as store_stocks
-    FROM products p
+    FROM (
+        SELECT * FROM products WHERE deleted_at IS NULL
+    ) p
     LEFT JOIN store_inventory si ON p.id = si.product_id
     LEFT JOIN stores s ON si.store_id = s.id
     GROUP BY p.id
@@ -522,7 +539,9 @@ SELECT
     sup.contact_name as supplier_contact,
     sup.phone as supplier_phone,
     sup.address as supplier_address
-FROM products p
+FROM (
+    SELECT * FROM products WHERE deleted_at IS NULL
+) p
 LEFT JOIN store_inventory_info si ON p.id = si.product_id
 LEFT JOIN supplier_products sp ON p.id = sp.product_id
 LEFT JOIN suppliers sup ON sp.supplier_id = sup.id;
@@ -537,9 +556,9 @@ WITH store_stats AS (
         COALESCE(SUM(o.total_amount), 0) as total_sales,
         COUNT(DISTINCT si.product_id) as product_count,
         COALESCE(SUM(si.quantity), 0) as total_inventory
-    FROM stores s
+FROM stores s
     LEFT JOIN employees e ON s.id = e.store_id
-    LEFT JOIN orders o ON s.id = o.store_id
+LEFT JOIN orders o ON s.id = o.store_id
     LEFT JOIN store_inventory si ON s.id = si.store_id
     GROUP BY s.id
 )
@@ -576,7 +595,9 @@ WITH supplier_stats AS (
         COUNT(DISTINCT sp.product_id) as total_products,
         COUNT(DISTINCT CASE WHEN p.stock < 10 THEN p.id END) as low_stock_products
     FROM supplier_products sp
-    LEFT JOIN products p ON sp.product_id = p.id
+    LEFT JOIN (
+        SELECT * FROM products WHERE deleted_at IS NULL
+    ) p ON sp.product_id = p.id
     LEFT JOIN order_items oi ON p.id = oi.product_id
     LEFT JOIN orders o ON oi.order_no = o.order_no
     GROUP BY sp.supplier_id
@@ -595,7 +616,9 @@ supplier_products_info AS (
         sp.supply_price,
         p.created_at as product_created_at
     FROM supplier_products sp
-    JOIN products p ON sp.product_id = p.id
+    JOIN (
+        SELECT * FROM products WHERE deleted_at IS NULL
+    ) p ON sp.product_id = p.id
 ),
 supplier_orders_info AS (
     SELECT 
@@ -609,7 +632,9 @@ supplier_orders_info AS (
         o.status,
         o.created_at as order_created_at
     FROM supplier_products sp
-    JOIN products p ON sp.product_id = p.id
+    JOIN (
+        SELECT * FROM products WHERE deleted_at IS NULL
+    ) p ON sp.product_id = p.id
     JOIN order_items oi ON p.id = oi.product_id
     JOIN orders o ON oi.order_no = o.order_no
     JOIN stores s ON o.store_id = s.id

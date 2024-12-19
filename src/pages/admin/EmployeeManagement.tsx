@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Space, Tag, Card, Empty } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, message, Space, Tag, Card, Empty, InputNumber, DatePicker } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import axios from 'axios';
+import dayjs from 'dayjs';
 
 interface Employee {
   id: number;
@@ -79,15 +80,26 @@ const EmployeeManagement: React.FC = () => {
   const handleSubmit = async (values: any) => {
     try {
       if (editingEmployee) {
-        await axios.put(`/api/admin/employees/${editingEmployee.id}`, values);
-        message.success('员工信息更新成功');
+        const response = await axios.put(`/api/admin/employees/${editingEmployee.id}`, values);
+        if (response.data.success) {
+          message.success('员工信息更新成功');
+          setModalVisible(false);
+          form.resetFields();
+          fetchEmployees();
+        } else {
+          message.error(response.data.error || '更新失败');
+        }
       } else {
-        await axios.post('/api/admin/employees', values);
-        message.success('员工添加成功');
+        const response = await axios.post('/api/admin/employees', values);
+        if (response.data.success) {
+          message.success('员工添加成功');
+          setModalVisible(false);
+          form.resetFields();
+          fetchEmployees();
+        } else {
+          message.error(response.data.error || '添加失败');
+        }
       }
-      setModalVisible(false);
-      form.resetFields();
-      fetchEmployees();
     } catch (error: any) {
       console.error('操作失败:', error);
       message.error(error.response?.data?.error || '操作失败');
@@ -153,7 +165,10 @@ const EmployeeManagement: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => {
               setEditingEmployee(record);
-              form.setFieldsValue(record);
+              form.setFieldsValue({
+                ...record,
+                hire_date: record.hire_date ? dayjs(record.hire_date) : undefined,
+              });
               setModalVisible(true);
             }}
           >
@@ -163,7 +178,13 @@ const EmployeeManagement: React.FC = () => {
             type="primary"
             danger
             icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record.id)}
+            onClick={() => {
+              Modal.confirm({
+                title: '确认删除',
+                content: `确定要删除员工 ${record.username} 吗？`,
+                onOk: () => handleDelete(record.id),
+              });
+            }}
           >
             删除
           </Button>
@@ -234,6 +255,23 @@ const EmployeeManagement: React.FC = () => {
           )}
 
           <Form.Item
+            name="email"
+            label="邮箱"
+            rules={[
+              { type: 'email', message: '请输入有效的邮箱地址' }
+            ]}
+          >
+            <Input />
+          </Form.Item>
+
+          <Form.Item
+            name="phone"
+            label="电话"
+          >
+            <Input />
+          </Form.Item>
+
+          <Form.Item
             name="position"
             label="职位"
             rules={[{ required: true, message: '请输入职位' }]}
@@ -260,7 +298,20 @@ const EmployeeManagement: React.FC = () => {
             label="薪资"
             rules={[{ required: true, message: '请输入薪资' }]}
           >
-            <Input type="number" prefix="¥" />
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              precision={2}
+              prefix="¥"
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="hire_date"
+            label="入职日期"
+            rules={[{ required: true, message: '请选择入职日期' }]}
+          >
+            <DatePicker style={{ width: '100%' }} />
           </Form.Item>
 
           <Form.Item>

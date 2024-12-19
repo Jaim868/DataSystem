@@ -104,7 +104,7 @@ const Orders: React.FC = () => {
       render: (status: string) => {
         const statusMap = {
           pending: { text: '待发货', color: 'gold' },
-          shipped: { text: '已发货', color: 'green' }
+          completed: { text: '已完成', color: 'green' }
         };
         const { text, color } = statusMap[status as keyof typeof statusMap] || { text: '未知', color: 'default' };
         return <Tag color={color}>{text}</Tag>;

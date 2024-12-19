@@ -359,6 +359,8 @@ class EmployeeController {
             // 验证管理员权限
             $this->checkManagerAuth();
 
+            error_log('Getting employees - Starting query execution');
+
             // 获取所有员工信息
             $stmt = $this->db->prepare("
                 SELECT DISTINCT 
@@ -370,20 +372,262 @@ class EmployeeController {
                     user_updated_at as updated_at,
                     store_id,
                     store_name,
-                    position
+                    position,
+                    DATE_FORMAT(hire_date, '%Y-%m-%d') as hire_date,
+                    salary
                 FROM employee_comprehensive_view
                 ORDER BY user_created_at DESC
             ");
             $stmt->execute();
             $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+            error_log('Raw employee data: ' . print_r($employees, true));
+
+            // 格式化数据
+            $formattedEmployees = array_map(function($employee) {
+                return [
+                    'id' => (int)$employee['id'],
+                    'username' => $employee['username'],
+                    'email' => $employee['email'],
+                    'role' => $employee['role'],
+                    'created_at' => $employee['created_at'],
+                    'updated_at' => $employee['updated_at'],
+                    'store_id' => (int)$employee['store_id'],
+                    'store_name' => $employee['store_name'],
+                    'position' => $employee['position'],
+                    'hire_date' => $employee['hire_date'],
+                    'salary' => (float)$employee['salary']
+                ];
+            }, $employees);
+
+            error_log('Formatted employee data: ' . print_r($formattedEmployees, true));
+
             header('Content-Type: application/json');
             echo json_encode([
                 'success' => true,
-                'data' => $employees
+                'data' => $formattedEmployees
             ]);
         } catch (Exception $e) {
             error_log('Get employees error: ' . $e->getMessage());
+            error_log('Stack trace: ' . $e->getTraceAsString());
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function addEmployee() {
+        try {
+            // 验证管理员权限
+            $this->checkManagerAuth();
+            
+            // ���取请求数据
+            $data = json_decode(file_get_contents('php://input'), true);
+            
+            // 验证必要字段
+            if (!isset($data['username']) || !isset($data['password']) || 
+                !isset($data['store_id']) || !isset($data['position']) || 
+                !isset($data['salary']) || !isset($data['hire_date'])) {
+                throw new Exception('缺少必要参数');
+            }
+
+            // 处理日期格式
+            $hire_date = date('Y-m-d', strtotime($data['hire_date']));
+
+            // 开始事务
+            $this->db->beginTransaction();
+
+            try {
+                // 1. 创建用户账号
+                $stmt = $this->db->prepare("
+                    INSERT INTO users (username, password, role, email, phone)
+                    VALUES (?, ?, 'employee', ?, ?)
+                ");
+                $stmt->execute([
+                    $data['username'],
+                    $data['password'],
+                    $data['email'] ?? null,
+                    $data['phone'] ?? null
+                ]);
+                
+                $userId = $this->db->lastInsertId();
+
+                // 2. 创建员工记录
+                $stmt = $this->db->prepare("
+                    INSERT INTO employees (id, store_id, hire_date, salary, position)
+                    VALUES (?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([
+                    $userId,
+                    $data['store_id'],
+                    $hire_date,
+                    $data['salary'],
+                    $data['position']
+                ]);
+
+                $this->db->commit();
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => '员工添加成功'
+                ]);
+            } catch (Exception $e) {
+                $this->db->rollBack();
+                throw $e;
+            }
+        } catch (Exception $e) {
+            error_log('Add employee error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function updateEmployee($id) {
+        try {
+            // 验证管理员权限
+            $this->checkManagerAuth();
+            
+            // 获取请求数据
+            $data = json_decode(file_get_contents('php://input'), true);
+            
+            // 验证必要字段
+            if (!isset($data['store_id']) || !isset($data['position']) || 
+                !isset($data['salary']) || !isset($data['hire_date'])) {
+                throw new Exception('缺少必要参数');
+            }
+
+            // 处理日期格式
+            $hire_date = date('Y-m-d', strtotime($data['hire_date']));
+
+            // 开始事务
+            $this->db->beginTransaction();
+
+            try {
+                // 1. 更新用户信息
+                $stmt = $this->db->prepare("
+                    UPDATE users 
+                    SET username = ?,
+                        email = ?,
+                        phone = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ");
+                $stmt->execute([
+                    $data['username'],
+                    $data['email'] ?? null,
+                    $data['phone'] ?? null,
+                    $id
+                ]);
+
+                // 2. 更新员工信息
+                $stmt = $this->db->prepare("
+                    UPDATE employees 
+                    SET store_id = ?,
+                        hire_date = ?,
+                        salary = ?,
+                        position = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ");
+                $stmt->execute([
+                    $data['store_id'],
+                    $hire_date,
+                    $data['salary'],
+                    $data['position'],
+                    $id
+                ]);
+
+                $this->db->commit();
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => '员工信息更新成功'
+                ]);
+            } catch (Exception $e) {
+                $this->db->rollBack();
+                throw $e;
+            }
+        } catch (Exception $e) {
+            error_log('Update employee error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function deleteEmployee($id) {
+        try {
+            // 验证管理员权限
+            $this->checkManagerAuth();
+
+            // 开始事务
+            $this->db->beginTransaction();
+
+            try {
+                // 检查员工是否存在
+                $stmt = $this->db->prepare("
+                    SELECT e.id, e.store_id, s.name as store_name 
+                    FROM employees e
+                    JOIN stores s ON e.store_id = s.id
+                    WHERE e.id = ?
+                ");
+                $stmt->execute([$id]);
+                $employee = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if (!$employee) {
+                    throw new Exception('员工不存在');
+                }
+
+                // 检查是否有相关的订单
+                $stmt = $this->db->prepare("
+                    SELECT COUNT(*) as count FROM orders 
+                    WHERE store_id = ?
+                ");
+                $stmt->execute([$employee['store_id']]);
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($result['count'] > 0) {
+                    throw new Exception("该员工所在商店({$employee['store_name']})存在订单记录，无法删除");
+                }
+
+                // 临时关闭外键检查
+                $this->db->exec('SET FOREIGN_KEY_CHECKS=0');
+
+                // 1. 删除员工记录
+                $stmt = $this->db->prepare("DELETE FROM employees WHERE id = ?");
+                if (!$stmt->execute([$id])) {
+                    throw new Exception('删除员工记录失败');
+                }
+
+                // 2. 删除用户账号
+                $stmt = $this->db->prepare("DELETE FROM users WHERE id = ?");
+                if (!$stmt->execute([$id])) {
+                    throw new Exception('删除用户账号失败');
+                }
+
+                // 恢复外键检查
+                $this->db->exec('SET FOREIGN_KEY_CHECKS=1');
+
+                $this->db->commit();
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => '员工删除成功'
+                ]);
+            } catch (Exception $e) {
+                // 确保恢复外键检查
+                $this->db->exec('SET FOREIGN_KEY_CHECKS=1');
+                $this->db->rollBack();
+                throw $e;
+            }
+        } catch (Exception $e) {
+            error_log('Delete employee error: ' . $e->getMessage());
             http_response_code(500);
             echo json_encode([
                 'success' => false,

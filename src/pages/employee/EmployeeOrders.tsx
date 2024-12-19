@@ -97,9 +97,7 @@ const EmployeeOrders: React.FC = () => {
           onChange={(value) => handleStatusChange(value, record.order_no)}
           options={[
             { value: 'pending', label: '待处理' },
-            { value: 'processing', label: '处理中' },
             { value: 'completed', label: '已完成' },
-            { value: 'cancelled', label: '已取消' },
           ]}
         />
       ),
