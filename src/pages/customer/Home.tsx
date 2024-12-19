@@ -82,18 +82,18 @@ const Home: React.FC = () => {
   }, [products, selectedCategory, loading, categories]);
 
   // 获取商品列表
-  const fetchProducts = async () => {
+  const fetchProducts = async (storeId: number | null = null, categoryName: string = '') => {
     setLoading(true);
     try {
       let url = '/api/products';
       const params = new URLSearchParams();
       
-      if (selectedStore !== null) {
-        params.append('store_id', selectedStore.toString());
+      if (storeId !== null) {
+        params.append('store_id', storeId.toString());
       }
       
-      if (selectedCategory) {
-        const category = categories.find(cat => cat.name === selectedCategory);
+      if (categoryName) {
+        const category = categories.find(cat => cat.name === categoryName);
         if (category) {
           if ('categories' in category && category.categories) {
             category.categories.forEach(cat => params.append('categories[]', cat));
@@ -109,7 +109,9 @@ const Home: React.FC = () => {
       }
       
       const response = await axios.get(url);
-      setProducts(response.data || []);
+      if (response.data) {
+        setProducts(response.data);
+      }
     } catch (error) {
       console.error('Error fetching products:', error);
       message.error('获取商品列表失败');
@@ -123,8 +125,11 @@ const Home: React.FC = () => {
   const fetchStores = async () => {
     try {
       const response = await axios.get('/api/stores');
-      console.log('Stores Response:', response.data); // 添加调试日志
-      setStores(response.data || []);
+      if (response.data) {
+        // 对商店列表按照 id 排序
+        const sortedStores = response.data.sort((a: { id: number }, b: { id: number }) => a.id - b.id);
+        setStores(sortedStores);
+      }
     } catch (error) {
       console.error('Error fetching stores:', error);
       message.error('获取商店列表失败');
@@ -135,45 +140,39 @@ const Home: React.FC = () => {
   // 初始化数据
   useEffect(() => {
     fetchStores();
+    fetchProducts(null, '');
   }, []);
 
-  // 监听筛选条件变化
-  useEffect(() => {
-    fetchProducts();
-  }, [selectedStore, selectedCategory]);
-
-  // 处理搜索
-  const handleSearch = (value: string) => {
-    setSearchText(value);
-    if (value.trim()) {
-      // 如果有搜索内容，过滤商品
-      const searchLower = value.toLowerCase().trim();
-      const searchResults = products.filter(product => {
-        const nameMatch = product.name.toLowerCase().includes(searchLower);
-        const descriptionMatch = product.description.toLowerCase().includes(searchLower);
-        return nameMatch || descriptionMatch;
-      });
-      setProducts(searchResults);
-    } else {
-      // 如果搜索框清空，重新获取所有商品
-      fetchProducts();
-    }
-  };
-
   // 处理分类选择
-  const handleCategoryClick = (category: string) => {
-    if (category === selectedCategory) {
-      setSelectedCategory('');
-    } else {
-      setSelectedCategory(category);
-      setSearchText('');
-    }
+  const handleCategoryClick = async (category: string) => {
+    const newCategory = category === selectedCategory ? '' : category;
+    setSelectedCategory(newCategory);
+    setSearchText('');
+    await fetchProducts(selectedStore, newCategory);
   };
 
   // 处理商店选择
-  const handleStoreChange = (value: number | null) => {
+  const handleStoreChange = async (value: number | null) => {
     setSelectedStore(value);
     setSearchText('');
+    await fetchProducts(value, selectedCategory);
+  };
+
+  // 处理搜索
+  const handleSearch = async (value: string) => {
+    setSearchText(value);
+    if (!value.trim()) {
+      await fetchProducts(selectedStore, selectedCategory);
+      return;
+    }
+
+    const searchLower = value.toLowerCase().trim();
+    const searchResults = products.filter(product => {
+      const nameMatch = product.name.toLowerCase().includes(searchLower);
+      const descriptionMatch = product.description.toLowerCase().includes(searchLower);
+      return nameMatch || descriptionMatch;
+    });
+    setProducts(searchResults);
   };
 
   // 渲染商店选择器
@@ -189,7 +188,9 @@ const Home: React.FC = () => {
           value={selectedStore}
         >
           {stores.map(store => (
-            <Option key={store.id} value={store.id}>{store.name}</Option>
+            <Option key={store.id} value={store.id}>
+              {`${store.id}号店 - ${store.name}`}
+            </Option>
           ))}
         </Select>
       </Space>
