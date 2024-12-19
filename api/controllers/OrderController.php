@@ -24,14 +24,13 @@ class OrderController {
             // 获取用户购物车商品
             $stmt = $this->db->prepare("
                 SELECT 
-                    c.product_id,
-                    c.quantity,
-                    p.price,
-                    p.stock,
-                    p.name
-                FROM cart_items c
-                JOIN products p ON c.product_id = p.id
-                WHERE c.user_id = ?
+                product_id,
+                cart_quantity as quantity,
+                price,
+                stock,
+                name
+            FROM cart_management_view
+            WHERE user_id = ?
             ");
             $stmt->execute([$userId]);
             $cartItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -126,21 +125,17 @@ class OrderController {
             }
 
             $stmt = $this->db->prepare("
-                SELECT 
-                    o.order_no,
-                    o.total_amount,
-                    o.status,
-                    o.created_at,
-                    COUNT(oi.id) as item_count,
-                    GROUP_CONCAT(DISTINCT p.name) as product_names
-                FROM orders o
-                LEFT JOIN order_items oi ON o.order_no = oi.order_no
-                LEFT JOIN products p ON oi.product_id = p.id
-                WHERE o.user_id = ?
-                GROUP BY o.order_no, o.total_amount, o.status, o.created_at
-                ORDER BY o.created_at DESC
+                SELECT DISTINCT 
+                    order_no,
+                    total_amount,
+                    status,
+                    created_at,
+                    item_count,
+                    product_names
+                FROM order_comprehensive_view
+                WHERE user_id = ? AND auth_user_id = ?
             ");
-            $stmt->execute([$userId]);
+            $stmt->execute([$userId, $userId]);
             $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // 确保数值类型正确
@@ -170,13 +165,13 @@ class OrderController {
 
             // 获取订单基本信息
             $stmt = $this->db->prepare("
-                SELECT 
-                    o.order_no,
-                    o.total_amount,
-                    o.status,
-                    o.created_at
-                FROM orders o
-                WHERE o.order_no = ? AND o.user_id = ?
+                SELECT DISTINCT
+                    order_no,
+                    total_amount,
+                    status,
+                    created_at
+                FROM order_comprehensive_view
+                WHERE order_no = ? AND auth_user_id = ? AND has_permission = 1
             ");
             $stmt->execute([$orderNo, $userId]);
             $order = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -188,17 +183,16 @@ class OrderController {
             // 获取订单项目
             $stmt = $this->db->prepare("
                 SELECT 
-                    oi.id,
-                    oi.product_id,
-                    p.name as product_name,
-                    p.image_url,
-                    oi.quantity,
-                    oi.price
-                FROM order_items oi
-                JOIN products p ON oi.product_id = p.id
-                WHERE oi.order_no = ?
+                    item_id as id,
+                    product_id,
+                    product_name,
+                    image_url,
+                    quantity,
+                    price
+                FROM order_comprehensive_view
+                WHERE order_no = ? AND auth_user_id = ? AND has_permission = 1
             ");
-            $stmt->execute([$orderNo]);
+            $stmt->execute([$orderNo, $userId]);
             $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // 确保数值类型正确
@@ -226,7 +220,10 @@ class OrderController {
 
             // 验证用户是否是管理员
             $stmt = $this->db->prepare("
-                SELECT role FROM users WHERE id = ?
+                SELECT DISTINCT auth_user_role as role 
+                FROM order_comprehensive_view 
+                WHERE auth_user_id = ? AND auth_user_role = 'manager'
+                LIMIT 1
             ");
             $stmt->execute([$userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -237,22 +234,22 @@ class OrderController {
 
             // 获取所有订单
             $stmt = $this->db->prepare("
-                SELECT 
-                    o.order_no,
-                    u.username as customer_name,
-                    o.total_amount,
-                    o.status,
-                    o.created_at,
-                    s.name as store_name,
-                    COUNT(oi.id) as item_count
-                FROM orders o
-                JOIN users u ON o.user_id = u.id
-                JOIN stores s ON o.store_id = s.id
-                LEFT JOIN order_items oi ON o.order_no = oi.order_no
-                GROUP BY o.order_no, o.user_id, o.total_amount, o.status, o.created_at, u.username, s.name
-                ORDER BY o.created_at DESC
+                SELECT DISTINCT
+                    order_no,
+                    customer_name,
+                    total_amount,
+                    status,
+                    created_at,
+                    store_name,
+                    item_count,
+                    products,
+                    quantities,
+                    prices
+                FROM order_comprehensive_view
+                WHERE auth_user_id = ? AND has_permission = 1
+                ORDER BY created_at DESC
             ");
-            $stmt->execute();
+            $stmt->execute([$userId]);
             $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // 处理数据格式
@@ -260,18 +257,23 @@ class OrderController {
                 $order['total_amount'] = (float)$order['total_amount'];
                 $order['item_count'] = (int)$order['item_count'];
                 
-                // 获取订单详情
-                $stmt = $this->db->prepare("
-                    SELECT 
-                        p.name as product_name,
-                        oi.quantity,
-                        oi.price
-                    FROM order_items oi
-                    JOIN products p ON oi.product_id = p.id
-                    WHERE oi.order_no = ?
-                ");
-                $stmt->execute([$order['order_no']]);
-                $order['items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                // 处理订单项目
+                $products = explode(',', $order['products']);
+                $quantities = array_map('intval', explode(',', $order['quantities']));
+                $prices = array_map('floatval', explode(',', $order['prices']));
+                
+                $order['items'] = array_map(function($product, $quantity, $price) {
+                    return [
+                        'product_name' => $product,
+                        'quantity' => $quantity,
+                        'price' => $price
+                    ];
+                }, $products, $quantities, $prices);
+                
+                // 移除原始的逗号分隔字段
+                unset($order['products']);
+                unset($order['quantities']);
+                unset($order['prices']);
             }
 
             echo json_encode($orders);
@@ -299,17 +301,10 @@ class OrderController {
 
             // 验证用户权限（管理员或对应商店的员工）
             $stmt = $this->db->prepare("
-                SELECT 
-                    u.role,
-                    CASE 
-                        WHEN u.role = 'manager' THEN 1
-                        WHEN u.role = 'employee' AND e.store_id = o.store_id THEN 1
-                        ELSE 0
-                    END as has_permission
-                FROM users u
-                LEFT JOIN employees e ON u.id = e.id
-                JOIN orders o ON o.order_no = ?
-                WHERE u.id = ?
+                SELECT has_permission
+                FROM order_comprehensive_view
+                WHERE order_no = ? AND auth_user_id = ?
+                LIMIT 1
             ");
             $stmt->execute([$orderNo, $userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -344,15 +339,14 @@ class OrderController {
 
             // 验证用户是否是员工并获取所属商店
             $stmt = $this->db->prepare("
-                SELECT 
-                    u.role, 
-                    u.username,
-                    e.store_id,
-                    s.name as store_name
-                FROM users u
-                LEFT JOIN employees e ON u.id = e.id
-                LEFT JOIN stores s ON e.store_id = s.id
-                WHERE u.id = ? AND u.role = 'employee'
+                SELECT DISTINCT
+                    auth_user_role as role,
+                    customer_name as username,
+                    employee_store_id as store_id,
+                    store_name
+                FROM order_comprehensive_view
+                WHERE auth_user_id = ? AND auth_user_role = 'employee'
+                LIMIT 1
             ");
             $stmt->execute([$userId]);
             $employee = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -369,23 +363,23 @@ class OrderController {
 
             // 获取该商店的所有订单
             $stmt = $this->db->prepare("
-                SELECT 
-                    o.order_no,
-                    u.username as customer_name,
-                    o.total_amount,
-                    o.status,
-                    o.created_at,
-                    COUNT(oi.id) as item_count
-                FROM orders o
-                JOIN users u ON o.user_id = u.id
-                LEFT JOIN order_items oi ON o.order_no = oi.order_no
-                WHERE o.store_id = ?
-                GROUP BY o.order_no, o.user_id, o.total_amount, o.status, o.created_at, u.username
-                ORDER BY o.created_at DESC
+                SELECT DISTINCT
+                    order_no,
+                    customer_name,
+                    total_amount,
+                    status,
+                    created_at,
+                    item_count,
+                    products,
+                    quantities,
+                    prices
+                FROM order_comprehensive_view
+                WHERE store_id = ? AND auth_user_id = ? AND has_permission = 1
+                ORDER BY created_at DESC
             ");
             
             error_log("Executing order query for store_id: " . $employee['store_id']);
-            $stmt->execute([$employee['store_id']]);
+            $stmt->execute([$employee['store_id'], $userId]);
             $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
             error_log("Found " . count($orders) . " orders");
 
@@ -394,23 +388,23 @@ class OrderController {
                 $order['total_amount'] = (float)$order['total_amount'];
                 $order['item_count'] = (int)$order['item_count'];
                 
-                // 获取订单详情
-                $stmt = $this->db->prepare("
-                    SELECT 
-                        p.name as product_name,
-                        oi.quantity,
-                        oi.price
-                    FROM order_items oi
-                    JOIN products p ON oi.product_id = p.id
-                    WHERE oi.order_no = ?
-                ");
-                $stmt->execute([$order['order_no']]);
-                $order['items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                foreach ($order['items'] as &$item) {
-                    $item['price'] = (float)$item['price'];
-                    $item['quantity'] = (int)$item['quantity'];
-                }
+                // 处理订单项目
+                $products = explode(',', $order['products']);
+                $quantities = array_map('intval', explode(',', $order['quantities']));
+                $prices = array_map('floatval', explode(',', $order['prices']));
+                
+                $order['items'] = array_map(function($product, $quantity, $price) {
+                    return [
+                        'product_name' => $product,
+                        'quantity' => $quantity,
+                        'price' => $price
+                    ];
+                }, $products, $quantities, $prices);
+                
+                // 移除原始的逗号分隔字段
+                unset($order['products']);
+                unset($order['quantities']);
+                unset($order['prices']);
             }
 
             echo json_encode([

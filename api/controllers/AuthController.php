@@ -28,7 +28,7 @@ class AuthController {
             // 先检查用户名和密码
             $stmt = $this->db->prepare("
                 SELECT id, username, role, password 
-                FROM users 
+                FROM user_auth_view 
                 WHERE username = ?
             ");
             $stmt->execute([$data['username']]);

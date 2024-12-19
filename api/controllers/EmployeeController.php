@@ -18,7 +18,7 @@ class EmployeeController {
         }
 
         $stmt = $this->db->prepare("
-            SELECT role FROM users 
+            SELECT role FROM user_auth_view 
             WHERE id = ? AND role = 'employee'
         ");
         $stmt->execute([$userId]);
@@ -38,7 +38,7 @@ class EmployeeController {
         }
 
         $stmt = $this->db->prepare("
-            SELECT role FROM users 
+            SELECT role FROM user_auth_view 
             WHERE id = ? AND role = 'manager'
         ");
         $stmt->execute([$userId]);
@@ -102,37 +102,22 @@ class EmployeeController {
             // 获取员工所在商店的订单
             $userId = $_SESSION['user_id'];
             
+            // 直接从综合视图获取订单信息
             $stmt = $this->db->prepare("
-                SELECT store_id 
-                FROM employees 
-                WHERE id = ?
+                SELECT DISTINCT 
+                    order_no,
+                    total_amount,
+                    order_status as status,
+                    order_created_at as created_at,
+                    customer_name,
+                    products,
+                    quantities
+                FROM employee_comprehensive_view 
+                WHERE id = ? AND order_no IS NOT NULL
+                ORDER BY order_created_at DESC
             ");
+            
             $stmt->execute([$userId]);
-            $employee = $stmt->fetch();
-            
-            if (!$employee) {
-                throw new Exception('找不到员工信息');
-            }
-
-            $stmt = $this->db->prepare("
-                SELECT 
-                    o.order_no,
-                    CAST(o.total_amount AS DECIMAL(10,2)) as total_amount,
-                    o.status,
-                    o.created_at,
-                    u.username as customer_name,
-                    GROUP_CONCAT(p.name) as products,
-                    GROUP_CONCAT(oi.quantity) as quantities
-                FROM orders o
-                JOIN users u ON o.user_id = u.id
-                JOIN order_items oi ON o.order_no = oi.order_no
-                JOIN products p ON oi.product_id = p.id
-                WHERE o.store_id = ?
-                GROUP BY o.order_no, o.total_amount, o.status, o.created_at, u.username
-                ORDER BY o.created_at DESC
-            ");
-            
-            $stmt->execute([$employee['store_id']]);
             $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // 处理数据类型
@@ -170,41 +155,29 @@ class EmployeeController {
             // 获取员工所在商店的库存
             $userId = $_SESSION['user_id'];
             
+            // 直接从综合视图获取库存信息
             $stmt = $this->db->prepare("
-                SELECT store_id 
-                FROM employees 
-                WHERE id = ?
+                SELECT DISTINCT 
+                    product_id,
+                    product_name,
+                    description,
+                    price,
+                    stock,
+                    category
+                FROM employee_comprehensive_view 
+                WHERE id = ? AND stock IS NOT NULL
+                ORDER BY category, product_name
             ");
+            
             $stmt->execute([$userId]);
-            $employee = $stmt->fetch();
-            
-            if (!$employee) {
-                throw new Exception('找不到员工信息');
-            }
-
-            $stmt = $this->db->prepare("
-                SELECT 
-                    p.id,
-                    p.name,
-                    p.description,
-                    CAST(p.price AS DECIMAL(10,2)) as price,
-                    si.quantity as stock,
-                    p.category
-                FROM products p
-                JOIN store_inventory si ON p.id = si.product_id
-                WHERE si.store_id = ? AND p.deleted_at IS NULL
-                ORDER BY p.category, p.name
-            ");
-            
-            $stmt->execute([$employee['store_id']]);
             $inventory = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // 处理数据类型
             $formattedInventory = array_map(function($item) {
                 return [
-                    'key' => $item['id'],
-                    'id' => (int)$item['id'],
-                    'name' => $item['name'],
+                    'key' => $item['product_id'],
+                    'id' => (int)$item['product_id'],
+                    'name' => $item['product_name'],
                     'description' => $item['description'],
                     'price' => (float)$item['price'],
                     'stock' => (int)$item['stock'],
@@ -232,9 +205,10 @@ class EmployeeController {
             // 获取员工所在商店
             $userId = $_SESSION['user_id'];
             $stmt = $this->db->prepare("
-                SELECT store_id 
-                FROM employees 
-                WHERE id = ?
+                SELECT DISTINCT store_id 
+                FROM employee_comprehensive_view 
+                WHERE id = ? AND store_id IS NOT NULL
+                LIMIT 1
             ");
             $stmt->execute([$userId]);
             $employee = $stmt->fetch();
@@ -253,10 +227,11 @@ class EmployeeController {
             // 检查商品是否存在于该商店的库存中
             $stmt = $this->db->prepare("
                 SELECT 1 
-                FROM store_inventory 
-                WHERE store_id = ? AND product_id = ?
+                FROM employee_comprehensive_view 
+                WHERE id = ? AND product_id = ? AND stock IS NOT NULL
+                LIMIT 1
             ");
-            $stmt->execute([$employee['store_id'], $productId]);
+            $stmt->execute([$userId, $productId]);
             
             if (!$stmt->fetch()) {
                 throw new Exception('商品不存在于当前商店库存中');
@@ -312,50 +287,39 @@ class EmployeeController {
             // 获取员工所在商店
             $userId = $_SESSION['user_id'];
             $stmt = $this->db->prepare("
-                SELECT store_id 
-                FROM employees 
-                WHERE id = ?
+                SELECT DISTINCT 
+                    store_id,
+                    store_name,
+                    today_orders,
+                    today_sales,
+                    pending_orders
+                FROM employee_comprehensive_view
+                WHERE id = ? AND store_id IS NOT NULL
+                LIMIT 1
             ");
             $stmt->execute([$userId]);
-            $employee = $stmt->fetch();
+            $employee = $stmt->fetch(PDO::FETCH_ASSOC);
             
             if (!$employee) {
                 throw new Exception('找不到员工信息');
             }
 
-            // 获取今日订单数销售额
-            $stmt = $this->db->prepare("
-                SELECT 
-                    COUNT(DISTINCT o.order_no) as today_orders,
-                    COALESCE(SUM(o.total_amount), 0) as today_sales,
-                    COUNT(DISTINCT CASE WHEN o.status = 'pending' THEN o.order_no END) as pending_orders
-                FROM orders o
-                WHERE o.store_id = ? 
-                AND DATE(o.created_at) = CURRENT_DATE
-            ");
-            $stmt->execute([$employee['store_id']]);
-            $stats = $stmt->fetch(PDO::FETCH_ASSOC);
-
             // 获取最近订单
             $stmt = $this->db->prepare("
-                SELECT 
-                    o.order_no,
-                    u.username as customer_name,
-                    CAST(o.total_amount AS DECIMAL(10,2)) as total_amount,
-                    o.status,
-                    o.created_at,
-                    GROUP_CONCAT(p.name) as products,
-                    GROUP_CONCAT(oi.quantity) as quantities
-                FROM orders o
-                JOIN users u ON o.user_id = u.id
-                JOIN order_items oi ON o.order_no = oi.order_no
-                JOIN products p ON oi.product_id = p.id
-                WHERE o.store_id = ?
-                GROUP BY o.order_no, u.username, o.total_amount, o.status, o.created_at
-                ORDER BY o.created_at DESC
+                SELECT DISTINCT
+                    order_no,
+                    customer_name,
+                    total_amount,
+                    order_status as status,
+                    order_created_at as created_at,
+                    products,
+                    quantities
+                FROM employee_comprehensive_view
+                WHERE id = ? AND order_no IS NOT NULL
+                ORDER BY order_created_at DESC
                 LIMIT 5
             ");
-            $stmt->execute([$employee['store_id']]);
+            $stmt->execute([$userId]);
             $recentOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // 格式化最近订单数据
@@ -375,9 +339,9 @@ class EmployeeController {
             echo json_encode([
                 'success' => true,
                 'data' => [
-                    'todayOrders' => (int)$stats['today_orders'],
-                    'todaySales' => (float)$stats['today_sales'],
-                    'pendingOrders' => (int)$stats['pending_orders'],
+                    'todayOrders' => (int)$employee['today_orders'],
+                    'todaySales' => (float)$employee['today_sales'],
+                    'pendingOrders' => (int)$employee['pending_orders'],
                     'recentOrders' => $formattedOrders
                 ]
             ]);
@@ -397,20 +361,18 @@ class EmployeeController {
 
             // 获取所有员工信息
             $stmt = $this->db->prepare("
-                SELECT 
-                    u.id,
-                    u.username,
-                    u.email,
-                    u.role,
-                    u.created_at,
-                    u.updated_at,
-                    e.store_id,
-                    s.name as store_name
-                FROM users u
-                LEFT JOIN employees e ON u.id = e.id
-                LEFT JOIN stores s ON e.store_id = s.id
-                WHERE u.role = 'employee'
-                ORDER BY u.created_at DESC
+                SELECT DISTINCT 
+                    id,
+                    username,
+                    email,
+                    role,
+                    user_created_at as created_at,
+                    user_updated_at as updated_at,
+                    store_id,
+                    store_name,
+                    position
+                FROM employee_comprehensive_view
+                ORDER BY user_created_at DESC
             ");
             $stmt->execute();
             $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);

@@ -23,16 +23,15 @@ class CartController {
 
             $stmt = $this->db->prepare("
                 SELECT 
-                    c.id as cart_id,
-                    c.quantity,
-                    p.id as product_id,
-                    p.name,
-                    p.price,
-                    p.image_url,
-                    p.stock
-                FROM cart_items c
-                JOIN products p ON c.product_id = p.id
-                WHERE c.user_id = ?
+                    cart_id,
+                    cart_quantity as quantity,
+                    product_id,
+                    name,
+                    price,
+                    image_url,
+                    stock
+                FROM cart_management_view
+                WHERE user_id = ?
             ");
             $stmt->execute([$userId]);
             $cartItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -63,7 +62,9 @@ class CartController {
 
             // 检查商品是否存在且有库存
             $stmt = $this->db->prepare("
-                SELECT stock FROM products WHERE id = ?
+                SELECT stock 
+                FROM cart_management_view 
+                WHERE product_id = ?
             ");
             $stmt->execute([$data['product_id']]);
             $product = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -78,7 +79,8 @@ class CartController {
 
             // 检查购物车是否已有此商品
             $stmt = $this->db->prepare("
-                SELECT id, quantity FROM cart_items 
+                SELECT cart_id as id, cart_quantity as quantity 
+                FROM cart_management_view 
                 WHERE user_id = ? AND product_id = ?
             ");
             $stmt->execute([$userId, $data['product_id']]);

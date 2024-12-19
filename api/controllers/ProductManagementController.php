@@ -14,7 +14,7 @@ class ProductManagementController {
                 SELECT 
                     id, 
                     name, 
-                    CAST(price AS FLOAT) as price, 
+                    price, 
                     description, 
                     category,
                     image_url, 
@@ -23,12 +23,31 @@ class ProductManagementController {
                     rating,
                     created_at,
                     updated_at
-                FROM products
+                FROM product_management_view
                 WHERE deleted_at IS NULL
                 ORDER BY created_at DESC
             ");
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 处理数据格式
+            $formattedProducts = array_map(function($product) {
+                return [
+                    'id' => (int)$product['id'],
+                    'name' => $product['name'],
+                    'price' => (float)$product['price'],
+                    'description' => $product['description'],
+                    'category' => $product['category'],
+                    'image_url' => $product['image_url'],
+                    'stock' => (int)$product['stock'],
+                    'sales' => (int)$product['sales'],
+                    'rating' => (float)$product['rating'],
+                    'created_at' => $product['created_at'],
+                    'updated_at' => $product['updated_at']
+                ];
+            }, $products);
+
+            return $formattedProducts;
         } catch(PDOException $e) {
             error_log('Get products error: ' . $e->getMessage());
             http_response_code(500);
@@ -67,7 +86,7 @@ class ProductManagementController {
                 SELECT 
                     id, 
                     name, 
-                    CAST(price AS FLOAT) as price, 
+                    price, 
                     description, 
                     category,
                     image_url, 
@@ -76,15 +95,32 @@ class ProductManagementController {
                     rating,
                     created_at,
                     updated_at
-                FROM products
+                FROM product_management_view
                 WHERE deleted_at IS NULL
                 ORDER BY created_at DESC
             ");
             $stmt->execute();
             $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+            // 处理数据格式
+            $formattedProducts = array_map(function($product) {
+                return [
+                    'id' => (int)$product['id'],
+                    'name' => $product['name'],
+                    'price' => (float)$product['price'],
+                    'description' => $product['description'],
+                    'category' => $product['category'],
+                    'image_url' => $product['image_url'],
+                    'stock' => (int)$product['stock'],
+                    'sales' => (int)$product['sales'],
+                    'rating' => (float)$product['rating'],
+                    'created_at' => $product['created_at'],
+                    'updated_at' => $product['updated_at']
+                ];
+            }, $products);
+
             header('Content-Type: application/json');
-            echo json_encode($products ?: []);
+            echo json_encode($formattedProducts ?: []);
         } catch(PDOException $e) {
             error_log('Get products error: ' . $e->getMessage());
             http_response_code(500);
@@ -182,7 +218,22 @@ class ProductManagementController {
 
             if ($result) {
                 // 获取更新后的商品数据
-                $stmt = $this->db->prepare("SELECT * FROM products WHERE id = ?");
+                $stmt = $this->db->prepare("
+                    SELECT 
+                        id, 
+                        name, 
+                        price, 
+                        description, 
+                        category,
+                        image_url, 
+                        stock,
+                        sales,
+                        rating,
+                        created_at,
+                        updated_at
+                    FROM product_management_view 
+                    WHERE id = ? AND deleted_at IS NULL
+                ");
                 $stmt->execute([$id]);
                 $updatedProduct = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -251,19 +302,16 @@ class ProductManagementController {
             // 获取所有商店的库存信息
             $stmt = $this->db->prepare("
                 SELECT 
-                    p.id,
-                    p.name,
-                    p.description,
-                    CAST(p.price AS DECIMAL(10,2)) as price,
-                    p.category,
-                    p.stock as total_stock,
-                    GROUP_CONCAT(CONCAT(s.name, ':', si.quantity) SEPARATOR ';') as store_stocks
-                FROM products p
-                LEFT JOIN store_inventory si ON p.id = si.product_id
-                LEFT JOIN stores s ON si.store_id = s.id
-                WHERE p.deleted_at IS NULL
-                GROUP BY p.id, p.name, p.description, p.price, p.category, p.stock
-                ORDER BY p.category, p.name
+                    id,
+                    name,
+                    description,
+                    price,
+                    category,
+                    stock as total_stock,
+                    store_stocks
+                FROM product_management_view
+                WHERE deleted_at IS NULL
+                ORDER BY category, name
             ");
             
             $stmt->execute();

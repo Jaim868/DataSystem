@@ -14,47 +14,41 @@ class ProductController {
             error_log("Fetching products for store_id: " . $storeId);
             
             if ($storeId) {
-                // 如果选择了特定商店，使用 INNER JOIN 获取该商店的库存
+                // 如果选择了特定商店，获取该商店的库存
                 $query = "
-                    SELECT 
-                        p.id,
-                        p.name,
-                        p.price,
-                        p.description,
-                        p.category,
-                        p.image_url,
-                        si.quantity as stock,
-                        p.rating,
-                        s.id as store_id,
-                        s.name as store_name
-                    FROM products p
-                    INNER JOIN store_inventory si ON p.id = si.product_id
-                    INNER JOIN stores s ON si.store_id = s.id
-                    WHERE p.deleted_at IS NULL 
-                    AND s.id = ?
-                    ORDER BY p.id
+                    SELECT DISTINCT
+                        id,
+                        name,
+                        price,
+                        description,
+                        category,
+                        image_url,
+                        store_quantity as stock,
+                        rating,
+                        store_id,
+                        store_name
+                    FROM product_comprehensive_view
+                    WHERE store_id = ?
+                    ORDER BY id
                 ";
                 $stmt = $this->db->prepare($query);
                 $stmt->execute([$storeId]);
             } else {
                 // 如果没有选择商店，显示所有商品
                 $query = "
-                    SELECT 
-                        p.id,
-                        p.name,
-                        p.price,
-                        p.description,
-                        p.category,
-                        p.image_url,
-                        p.stock,
-                        p.rating,
-                        s.id as store_id,
-                        s.name as store_name
-                    FROM products p
-                    LEFT JOIN store_inventory si ON p.id = si.product_id
-                    LEFT JOIN stores s ON si.store_id = s.id
-                    WHERE p.deleted_at IS NULL
-                    ORDER BY p.id
+                    SELECT DISTINCT
+                        id,
+                        name,
+                        price,
+                        description,
+                        category,
+                        image_url,
+                        total_stock as stock,
+                        rating,
+                        store_id,
+                        store_name
+                    FROM product_comprehensive_view
+                    ORDER BY id
                 ";
                 $stmt = $this->db->prepare($query);
                 $stmt->execute();
@@ -94,20 +88,23 @@ class ProductController {
     public function getProduct($id) {
         try {
             $stmt = $this->db->prepare("
-                SELECT 
-                    p.*,
-                    si.quantity as store_quantity,
-                    s.id as store_id,
-                    s.name as store_name,
-                    sp.supplier_id,
-                    sup.company_name as supplier_name,
-                    sup.contact_name as supplier_contact
-                FROM products p
-                LEFT JOIN store_inventory si ON p.id = si.product_id
-                LEFT JOIN stores s ON si.store_id = s.id
-                LEFT JOIN supplier_products sp ON p.id = sp.product_id
-                LEFT JOIN suppliers sup ON sp.supplier_id = sup.id
-                WHERE p.id = ? AND p.deleted_at IS NULL
+                SELECT DISTINCT
+                    id,
+                    name,
+                    price,
+                    description,
+                    category,
+                    image_url,
+                    COALESCE(store_quantity, total_stock) as stock,
+                    rating,
+                    sales,
+                    store_id,
+                    store_name,
+                    supplier_id,
+                    supplier_name,
+                    supplier_contact
+                FROM product_comprehensive_view
+                WHERE id = ?
                 LIMIT 1
             ");
             $stmt->execute([$id]);
@@ -117,9 +114,6 @@ class ProductController {
                 throw new Exception("商品不存在");
             }
             
-            // 处理库存数量
-            $stock = $product['store_quantity'] ?? $product['stock'] ?? 0;
-            
             return [
                 'id' => (int)$product['id'],
                 'name' => $product['name'],
@@ -127,7 +121,7 @@ class ProductController {
                 'description' => $product['description'],
                 'category' => $product['category'],
                 'image_url' => $product['image_url'],
-                'stock' => (int)$stock,
+                'stock' => (int)$product['stock'],
                 'rating' => (float)$product['rating'],
                 'sales' => (int)$product['sales'],
                 'store_id' => $product['store_id'] ? (int)$product['store_id'] : null,

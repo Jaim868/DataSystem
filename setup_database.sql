@@ -224,67 +224,431 @@ INSERT INTO order_items (order_no, product_id, quantity, price) VALUES
 ('ORD202301005', 2, 2, 49.99),
 ('ORD202301005', 3, 5, 19.99);
 
--- 创建视图
--- 库存视图
-CREATE OR REPLACE VIEW inventory_view AS
+-- 删除原有的订单相关视图
+
+
+-- 创建综合订单视图
+CREATE OR REPLACE VIEW order_comprehensive_view AS
+WITH order_base AS (
+    SELECT 
+        o.order_no,
+        o.user_id,
+        o.store_id,
+        o.total_amount,
+        o.status,
+        o.created_at,
+        o.updated_at,
+        u.username as customer_name,
+        s.name as store_name,
+        COUNT(oi.id) as item_count,
+        GROUP_CONCAT(DISTINCT p.name) as product_names,
+        GROUP_CONCAT(p.name ORDER BY oi.id) as products,
+        GROUP_CONCAT(oi.quantity ORDER BY oi.id) as quantities,
+        GROUP_CONCAT(oi.price ORDER BY oi.id) as prices
+    FROM orders o
+    LEFT JOIN users u ON o.user_id = u.id
+    LEFT JOIN stores s ON o.store_id = s.id
+    LEFT JOIN order_items oi ON o.order_no = oi.order_no
+    LEFT JOIN products p ON oi.product_id = p.id
+    GROUP BY 
+        o.order_no, 
+        o.user_id, 
+        o.store_id, 
+        o.total_amount, 
+        o.status, 
+        o.created_at, 
+        o.updated_at, 
+        u.username, 
+        s.name
+)
+SELECT 
+    ob.*,
+    oi.id as item_id,
+    oi.product_id,
+    p.name as product_name,
+    p.image_url,
+    oi.quantity,
+    oi.price,
+    CASE 
+        WHEN u.role = 'manager' THEN 1
+        WHEN u.role = 'employee' AND e.store_id = ob.store_id THEN 1
+        WHEN u.role = 'customer' AND ob.user_id = u.id THEN 1
+        ELSE 0
+    END as has_permission,
+    u.id as auth_user_id,
+    u.role as auth_user_role,
+    e.store_id as employee_store_id
+FROM order_base ob
+LEFT JOIN order_items oi ON ob.order_no = oi.order_no
+LEFT JOIN products p ON oi.product_id = p.id
+CROSS JOIN users u
+LEFT JOIN employees e ON u.id = e.id;
+
+-- 创建管理员仪表盘统计视图
+CREATE OR REPLACE VIEW admin_dashboard_stats_view AS
+WITH date_range AS (
+    SELECT CURDATE() - INTERVAL (a.a + (10 * b.a) + (100 * c.a)) DAY AS date
+    FROM (SELECT 0 AS a UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS a
+    CROSS JOIN (SELECT 0 AS a UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) AS b
+    CROSS JOIN (SELECT 0 AS a) AS c
+    WHERE CURDATE() - INTERVAL (a.a + (10 * b.a) + (100 * c.a)) DAY >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+),
+daily_stats AS (
+    SELECT 
+        COALESCE(dates.date, CURDATE()) as date,
+        COUNT(DISTINCT o.order_no) as order_count,
+        COALESCE(SUM(o.total_amount), 0) as daily_sales,
+        COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total_amount ELSE 0 END), 0) as total_completed_sales,
+        COUNT(DISTINCT CASE WHEN o.status = 'pending' THEN o.order_no END) as pending_orders,
+        COUNT(DISTINCT CASE WHEN o.status = 'processing' THEN o.order_no END) as processing_orders,
+        COUNT(DISTINCT CASE WHEN o.status = 'completed' THEN o.order_no END) as completed_orders,
+        COUNT(DISTINCT CASE WHEN o.status = 'cancelled' THEN o.order_no END) as cancelled_orders
+    FROM date_range dates
+    LEFT JOIN orders o ON DATE(o.created_at) = dates.date
+    GROUP BY dates.date
+),
+user_stats AS (
+    SELECT COUNT(DISTINCT id) as customer_count
+    FROM users 
+    WHERE role = 'customer'
+),
+store_stats AS (
+    SELECT COUNT(DISTINCT id) as store_count
+    FROM stores
+),
+total_stats AS (
+    SELECT 
+        CURDATE() as date,
+        COUNT(DISTINCT o.order_no) as order_count,
+        COALESCE(SUM(o.total_amount), 0) as daily_sales,
+        COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total_amount ELSE 0 END), 0) as total_completed_sales,
+        COUNT(DISTINCT CASE WHEN o.status = 'pending' THEN o.order_no END) as pending_orders,
+        COUNT(DISTINCT CASE WHEN o.status = 'processing' THEN o.order_no END) as processing_orders,
+        COUNT(DISTINCT CASE WHEN o.status = 'completed' THEN o.order_no END) as completed_orders,
+        COUNT(DISTINCT CASE WHEN o.status = 'cancelled' THEN o.order_no END) as cancelled_orders
+    FROM orders o
+)
+SELECT 
+    ds.*,
+    us.customer_count,
+    ss.store_count
+FROM (
+    SELECT * FROM daily_stats
+    UNION ALL
+    SELECT * FROM total_stats
+) ds
+CROSS JOIN user_stats us
+CROSS JOIN store_stats ss;
+
+-- 创建每日订单统计视图
+CREATE OR REPLACE VIEW daily_order_stats_view AS
+SELECT 
+    DATE(created_at) as date,
+    COUNT(*) as order_count,
+    SUM(total_amount) as daily_sales
+FROM orders
+WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+GROUP BY DATE(created_at);
+
+-- 创建用户认证视图
+CREATE OR REPLACE VIEW user_auth_view AS
+SELECT 
+    u.id,
+    u.username,
+    u.password,
+    u.role,
+    u.email,
+    u.phone,
+    CASE 
+        WHEN e.id IS NOT NULL THEN e.store_id
+        ELSE NULL
+    END as store_id,
+    CASE 
+        WHEN e.id IS NOT NULL THEN e.position
+        ELSE NULL
+    END as position,
+    u.created_at,
+    u.updated_at
+FROM users u
+LEFT JOIN employees e ON u.id = e.id;
+
+-- 创建购物车管理视图（包含库存信息）
+CREATE OR REPLACE VIEW cart_management_view AS
+SELECT 
+    p.id as product_id,
+    p.name,
+    p.price,
+    p.stock,
+    p.image_url,
+    ci.id as cart_id,
+    ci.user_id,
+    ci.quantity as cart_quantity,
+    ci.created_at,
+    ci.updated_at
+FROM products p
+LEFT JOIN cart_items ci ON p.id = ci.product_id;
+
+-- 删除原有的员工相关视图
+DROP VIEW IF EXISTS employee_orders_view;
+DROP VIEW IF EXISTS employee_inventory_view;
+DROP VIEW IF EXISTS employee_info_view;
+
+-- 创建综合员工视图
+CREATE OR REPLACE VIEW employee_comprehensive_view AS
+WITH employee_base AS (
+    SELECT 
+        u.id,
+        u.username,
+        u.email,
+        u.role,
+        u.created_at as user_created_at,
+        u.updated_at as user_updated_at,
+        e.store_id,
+        s.name as store_name,
+        e.position
+    FROM users u
+    LEFT JOIN employees e ON u.id = e.id
+    LEFT JOIN stores s ON e.store_id = s.id
+    WHERE u.role = 'employee'
+),
+inventory_info AS (
+    SELECT 
+        si.store_id,
+        p.id as product_id,
+        p.name as product_name,
+        p.description,
+        CAST(p.price AS DECIMAL(10,2)) as price,
+        si.quantity as stock,
+        p.category,
+        si.updated_at as inventory_updated_at
+    FROM products p
+    JOIN store_inventory si ON p.id = si.product_id
+),
+order_info AS (
+    SELECT 
+        o.store_id,
+        o.order_no,
+        CAST(o.total_amount AS DECIMAL(10,2)) as total_amount,
+        o.status,
+        o.created_at as order_created_at,
+        u.username as customer_name,
+        GROUP_CONCAT(p.name) as products,
+        GROUP_CONCAT(oi.quantity) as quantities,
+        COUNT(DISTINCT o.order_no) as today_orders,
+        COALESCE(SUM(o.total_amount), 0) as today_sales,
+        COUNT(DISTINCT CASE WHEN o.status = 'pending' THEN o.order_no END) as pending_orders
+    FROM orders o
+    JOIN users u ON o.user_id = u.id
+    JOIN order_items oi ON o.order_no = oi.order_no
+    JOIN products p ON oi.product_id = p.id
+    GROUP BY o.store_id, o.order_no, o.total_amount, o.status, o.created_at, u.username
+)
+SELECT 
+    eb.*,
+    ii.product_id,
+    ii.product_name,
+    ii.description,
+    ii.price,
+    ii.stock,
+    ii.category,
+    ii.inventory_updated_at,
+    oi.order_no,
+    oi.total_amount,
+    oi.status as order_status,
+    oi.order_created_at,
+    oi.customer_name,
+    oi.products,
+    oi.quantities,
+    oi.today_orders,
+    oi.today_sales,
+    oi.pending_orders
+FROM employee_base eb
+LEFT JOIN inventory_info ii ON eb.store_id = ii.store_id
+LEFT JOIN order_info oi ON eb.store_id = oi.store_id;
+
+-- 创建综合产品视图
+CREATE OR REPLACE VIEW product_comprehensive_view AS
 SELECT 
     p.id,
-    p.name AS product_name,
-    p.description,
+    p.name,
     p.price,
-    si.quantity,
-    s.name AS store_name,
-    s.id AS store_id,
-    si.updated_at
+    p.description,
+    p.category,
+    p.image_url,
+    p.stock as total_stock,
+    p.rating,
+    p.sales,
+    si.store_id,
+    s.name as store_name,
+    si.quantity as store_quantity,
+    sp.supplier_id,
+    sup.company_name as supplier_name,
+    sup.contact_name as supplier_contact,
+    sup.phone as supplier_phone,
+    sup.address as supplier_address
 FROM products p
 LEFT JOIN store_inventory si ON p.id = si.product_id
 LEFT JOIN stores s ON si.store_id = s.id
-WHERE p.deleted_at IS NULL;
+LEFT JOIN supplier_products sp ON p.id = sp.product_id
+LEFT JOIN suppliers sup ON sp.supplier_id = sup.id;
 
--- 销售统计视图
-CREATE OR REPLACE VIEW sales_statistics_view AS
+-- 创建产品管理视图
+CREATE OR REPLACE VIEW product_management_view AS
+WITH store_inventory_info AS (
+    SELECT 
+        p.id as product_id,
+        GROUP_CONCAT(CONCAT(s.name, ':', si.quantity) SEPARATOR ';') as store_stocks
+    FROM products p
+    LEFT JOIN store_inventory si ON p.id = si.product_id
+    LEFT JOIN stores s ON si.store_id = s.id
+    GROUP BY p.id
+)
 SELECT 
-    s.id AS store_id,
-    s.name AS store_name,
-    COUNT(o.order_no) AS total_orders,
-    COALESCE(SUM(o.total_amount), 0) AS total_sales,
-    COUNT(CASE WHEN o.status = 'pending' THEN 1 END) AS pending_orders,
-    COUNT(CASE WHEN DATE(o.created_at) = CURRENT_DATE THEN 1 END) AS today_orders,
-    COALESCE(SUM(CASE WHEN DATE(o.created_at) = CURRENT_DATE THEN o.total_amount ELSE 0 END), 0) AS today_sales
-FROM stores s
-LEFT JOIN orders o ON s.id = o.store_id
-GROUP BY s.id, s.name;
-
--- 商品销售排行视图
-CREATE OR REPLACE VIEW product_sales_ranking_view AS
-SELECT 
-    p.id AS product_id,
-    p.name AS product_name,
-    COUNT(oi.order_no) AS total_orders,
-    SUM(oi.quantity) AS total_quantity_sold,
-    COALESCE(SUM(oi.quantity * oi.price), 0) AS total_sales_amount
-FROM products p
-LEFT JOIN order_items oi ON p.id = oi.product_id
-LEFT JOIN orders o ON oi.order_no = o.order_no
-WHERE p.deleted_at IS NULL
-GROUP BY p.id, p.name
-ORDER BY total_sales_amount DESC;
-
--- 供应商销售统计视图
-CREATE OR REPLACE VIEW supplier_sales_view AS
-SELECT 
+    p.id,
+    p.name,
+    CAST(p.price AS DECIMAL(10,2)) as price,
+    p.description,
+    p.category,
+    p.image_url,
+    p.stock,
+    p.sales,
+    p.rating,
+    p.created_at,
+    p.updated_at,
+    p.deleted_at,
+    si.store_stocks,
     sp.supplier_id,
-    COUNT(DISTINCT oi.order_no) as total_orders,
-    SUM(oi.quantity) as total_quantity_sold,
-    SUM(oi.quantity * sp.supply_price) as total_revenue,
-    COUNT(CASE WHEN p.stock < 10 THEN 1 END) as low_stock_products,
-    COUNT(DISTINCT p.id) as total_products
-FROM supplier_products sp
-LEFT JOIN products p ON sp.product_id = p.id
-LEFT JOIN order_items oi ON p.id = oi.product_id
-LEFT JOIN orders o ON oi.order_no = o.order_no
-WHERE p.deleted_at IS NULL
-GROUP BY sp.supplier_id;
+    sup.company_name as supplier_name,
+    sup.contact_name as supplier_contact,
+    sup.phone as supplier_phone,
+    sup.address as supplier_address
+FROM products p
+LEFT JOIN store_inventory_info si ON p.id = si.product_id
+LEFT JOIN supplier_products sp ON p.id = sp.product_id
+LEFT JOIN suppliers sup ON sp.supplier_id = sup.id;
+
+-- 创建商店管理视图
+CREATE OR REPLACE VIEW store_management_view AS
+WITH store_stats AS (
+    SELECT 
+        s.id as store_id,
+        COUNT(DISTINCT e.id) as employee_count,
+        COUNT(DISTINCT o.order_no) as order_count,
+        COALESCE(SUM(o.total_amount), 0) as total_sales,
+        COUNT(DISTINCT si.product_id) as product_count,
+        COALESCE(SUM(si.quantity), 0) as total_inventory
+    FROM stores s
+    LEFT JOIN employees e ON s.id = e.store_id
+    LEFT JOIN orders o ON s.id = o.store_id
+    LEFT JOIN store_inventory si ON s.id = si.store_id
+    GROUP BY s.id
+)
+SELECT 
+    s.id,
+    s.name,
+    s.address,
+    s.phone,
+    s.created_at,
+    s.updated_at,
+    ss.employee_count,
+    ss.order_count,
+    ss.total_sales,
+    ss.product_count,
+    ss.total_inventory,
+    GROUP_CONCAT(DISTINCT e.id) as employee_ids,
+    GROUP_CONCAT(DISTINCT p.name) as product_names
+FROM stores s
+LEFT JOIN store_stats ss ON s.id = ss.store_id
+LEFT JOIN employees e ON s.id = e.store_id
+LEFT JOIN store_inventory si ON s.id = si.store_id
+LEFT JOIN products p ON si.product_id = p.id
+GROUP BY 
+    s.id, s.name, s.address, s.phone, s.created_at, s.updated_at,
+    ss.employee_count, ss.order_count, ss.total_sales, ss.product_count, ss.total_inventory;
+
+-- 创建供应商综合视图
+CREATE OR REPLACE VIEW supplier_comprehensive_view AS
+WITH supplier_stats AS (
+    SELECT 
+        sp.supplier_id,
+        COUNT(DISTINCT o.order_no) as total_orders,
+        COALESCE(SUM(oi.quantity * sp.supply_price), 0) as total_revenue,
+        COUNT(DISTINCT sp.product_id) as total_products,
+        COUNT(DISTINCT CASE WHEN p.stock < 10 THEN p.id END) as low_stock_products
+    FROM supplier_products sp
+    LEFT JOIN products p ON sp.product_id = p.id
+    LEFT JOIN order_items oi ON p.id = oi.product_id
+    LEFT JOIN orders o ON oi.order_no = o.order_no
+    GROUP BY sp.supplier_id
+),
+supplier_products_info AS (
+    SELECT 
+        sp.supplier_id,
+        p.id as product_id,
+        p.name as product_name,
+        p.price,
+        p.description,
+        p.category,
+        p.image_url,
+        p.stock,
+        p.rating,
+        sp.supply_price,
+        p.created_at as product_created_at
+    FROM supplier_products sp
+    JOIN products p ON sp.product_id = p.id
+),
+supplier_orders_info AS (
+    SELECT 
+        sp.supplier_id,
+        o.order_no,
+        s.name as store_name,
+        p.name as product_name,
+        oi.quantity,
+        sp.supply_price,
+        (oi.quantity * sp.supply_price) as total_amount,
+        o.status,
+        o.created_at as order_created_at
+    FROM supplier_products sp
+    JOIN products p ON sp.product_id = p.id
+    JOIN order_items oi ON p.id = oi.product_id
+    JOIN orders o ON oi.order_no = o.order_no
+    JOIN stores s ON o.store_id = s.id
+)
+SELECT 
+    u.id as supplier_id,
+    u.username,
+    u.email,
+    u.role,
+    s.company_name,
+    s.contact_name,
+    s.phone,
+    s.address,
+    ss.total_orders,
+    ss.total_revenue,
+    ss.total_products,
+    ss.low_stock_products,
+    spi.product_id,
+    spi.product_name,
+    spi.price,
+    spi.description,
+    spi.category,
+    spi.image_url,
+    spi.stock,
+    spi.rating,
+    spi.supply_price,
+    spi.product_created_at,
+    soi.order_no,
+    soi.store_name,
+    soi.quantity,
+    soi.total_amount,
+    soi.status,
+    soi.order_created_at
+FROM users u
+JOIN suppliers s ON u.id = s.id
+LEFT JOIN supplier_stats ss ON s.id = ss.supplier_id
+LEFT JOIN supplier_products_info spi ON s.id = spi.supplier_id
+LEFT JOIN supplier_orders_info soi ON s.id = soi.supplier_id
+WHERE u.role = 'supplier';
 
 -- 恢复外键检查
 SET FOREIGN_KEY_CHECKS=1;

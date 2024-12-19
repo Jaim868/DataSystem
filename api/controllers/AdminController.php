@@ -38,39 +38,34 @@ class AdminController {
         try {
             $this->checkAdminAuth();
             
-            // 获取总销售额
+            // 获取最新的统计数据
             $stmt = $this->db->prepare("
-                SELECT COALESCE(SUM(total_amount), 0) as total_sales
-                FROM orders
-                WHERE status = 'completed'
+                SELECT 
+                    COALESCE(SUM(total_completed_sales), 0) as total_sales,
+                    MAX(customer_count) as total_users,
+                    MAX(store_count) as total_stores
+                FROM admin_dashboard_stats_view
+                WHERE date = CURDATE()
+                GROUP BY date;
             ");
             $stmt->execute();
-            $salesResult = $stmt->fetch(PDO::FETCH_ASSOC);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            // 获取总用户数
-            $stmt = $this->db->prepare("
-                SELECT COUNT(*) as total_users
-                FROM users
-                WHERE role = 'customer'
-            ");
-            $stmt->execute();
-            $usersResult = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            // 获取总商店数
-            $stmt = $this->db->prepare("
-                SELECT COUNT(*) as total_stores
-                FROM stores
-            ");
-            $stmt->execute();
-            $storesResult = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$result) {
+                $result = [
+                    'total_sales' => 0,
+                    'total_users' => 0,
+                    'total_stores' => 0
+                ];
+            }
 
             header('Content-Type: application/json');
             echo json_encode([
                 'success' => true,
                 'data' => [
-                    'totalSales' => (float)$salesResult['total_sales'],
-                    'totalUsers' => (int)$usersResult['total_users'],
-                    'totalStores' => (int)$storesResult['total_stores']
+                    'totalSales' => (float)$result['total_sales'],
+                    'totalUsers' => (int)$result['total_users'],
+                    'totalStores' => (int)$result['total_stores']
                 ]
             ]);
         } catch (Exception $e) {
@@ -90,12 +85,11 @@ class AdminController {
             // 获取最近7天的订单统计
             $stmt = $this->db->query("
                 SELECT 
-                    DATE(created_at) as date,
-                    COUNT(*) as order_count,
-                    SUM(total_amount) as daily_sales
-                FROM orders
-                WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-                GROUP BY DATE(created_at)
+                    date,
+                    order_count,
+                    daily_sales
+                FROM daily_order_stats_view
+                WHERE date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
                 ORDER BY date DESC
             ");
             

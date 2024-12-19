@@ -24,7 +24,9 @@ class SupplierController {
             }
 
             $stmt = $this->db->prepare("
-                SELECT role FROM users WHERE id = ?
+                SELECT DISTINCT role 
+                FROM supplier_comprehensive_view 
+                WHERE supplier_id = ?
             ");
             $stmt->execute([$userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -34,20 +36,19 @@ class SupplierController {
             }
 
             $stmt = $this->db->prepare("
-                SELECT 
-                    p.id,
-                    p.name,
-                    CAST(p.price AS DECIMAL(10,2)) as price,
-                    p.description,
-                    p.category,
-                    p.image_url,
-                    p.stock,
-                    p.rating,
-                    sp.supply_price
-                FROM products p
-                JOIN supplier_products sp ON p.id = sp.product_id
-                WHERE sp.supplier_id = ?
-                ORDER BY p.created_at DESC
+                SELECT DISTINCT
+                    product_id as id,
+                    product_name as name,
+                    price,
+                    description,
+                    category,
+                    image_url,
+                    stock,
+                    rating,
+                    supply_price
+                FROM supplier_comprehensive_view
+                WHERE supplier_id = ?
+                ORDER BY product_name
             ");
             
             error_log('Executing supplier products query for user ID: ' . $userId);
@@ -101,12 +102,12 @@ class SupplierController {
 
             // 获取供应商的统计数据
             $stmt = $this->db->prepare("
-                SELECT 
+                SELECT DISTINCT
                     total_orders,
                     total_revenue,
                     total_products,
                     low_stock_products
-                FROM supplier_sales_view
+                FROM supplier_comprehensive_view
                 WHERE supplier_id = ?
             ");
             $stmt->execute([$userId]);
@@ -114,19 +115,16 @@ class SupplierController {
 
             // 获取最近订单
             $stmt = $this->db->prepare("
-                SELECT 
-                    o.order_no,
-                    p.name as product_name,
-                    oi.quantity,
-                    oi.quantity * sp.supply_price as total_amount,
-                    o.status,
-                    o.created_at
-                FROM orders o
-                JOIN order_items oi ON o.order_no = oi.order_no
-                JOIN products p ON oi.product_id = p.id
-                JOIN supplier_products sp ON p.id = sp.product_id
-                WHERE sp.supplier_id = ?
-                ORDER BY o.created_at DESC
+                SELECT DISTINCT
+                    order_no,
+                    product_name,
+                    quantity,
+                    total_amount,
+                    status,
+                    order_created_at as created_at
+                FROM supplier_comprehensive_view
+                WHERE supplier_id = ? AND order_no IS NOT NULL
+                ORDER BY order_created_at DESC
                 LIMIT 5
             ");
             $stmt->execute([$userId]);
@@ -171,7 +169,9 @@ class SupplierController {
 
             // 先检查用户是否是供应商
             $stmt = $this->db->prepare("
-                SELECT role FROM users WHERE id = ?
+                SELECT DISTINCT role 
+                FROM supplier_comprehensive_view 
+                WHERE supplier_id = ?
             ");
             $stmt->execute([$userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -180,29 +180,22 @@ class SupplierController {
                 throw new Exception('非供应商用户');
             }
 
-            $query = "
-                SELECT 
-                    o.order_no,
-                    s.name as store_name,
-                    p.name as product_name,
-                    oi.quantity,
-                    sp.supply_price,
-                    (oi.quantity * sp.supply_price) as total_amount,
-                    o.status,
-                    o.created_at
-                FROM orders o
-                JOIN order_items oi ON o.order_no = oi.order_no
-                JOIN products p ON oi.product_id = p.id
-                JOIN supplier_products sp ON p.id = sp.product_id
-                JOIN stores s ON o.store_id = s.id
-                WHERE sp.supplier_id = ?
-                ORDER BY o.created_at DESC
-            ";
+            $stmt = $this->db->prepare("
+                SELECT DISTINCT
+                    order_no,
+                    store_name,
+                    product_name,
+                    quantity,
+                    supply_price,
+                    total_amount,
+                    status,
+                    order_created_at as created_at
+                FROM supplier_comprehensive_view
+                WHERE supplier_id = ? AND order_no IS NOT NULL
+                ORDER BY order_created_at DESC
+            ");
             
-            error_log('Executing query: ' . $query);
-            error_log('With user ID: ' . $userId);
-            
-            $stmt = $this->db->prepare($query);
+            error_log('Executing query for user ID: ' . $userId);
             $stmt->execute([$userId]);
             
             // 检查是否有SQL错误
