@@ -250,21 +250,22 @@ try {
                 }
                 break;
     
-            // 购物车项目管理
-            case (preg_match('/^cart\/\d+$/', $resource) ? $resource : !$resource):
-                $controller = new CartController();
-                $id = (int)$uri[count($uri) - 1];
-                switch ($_SERVER['REQUEST_METHOD']) {
-                    case 'PUT':
-                        $controller->updateCartItem($id);
-                        break;
-                    case 'DELETE':
-                        $controller->removeFromCart($id);
-                        break;
-                    default:
-                        throw new Exception('不支持的请求方法');
-                }
+            // 修复路由匹配问题
+                case (preg_match('/^api\/cart\/\d+$/', $resource) ? $resource : !$resource):
+                    $controller = new CartController();
+                    $id = (int)explode('/', $resource)[count(explode('/', $resource)) - 1];
+                    switch ($_SERVER['REQUEST_METHOD']) {
+                        case 'PUT':
+                            $controller->updateCartItem($id);
+                            break;
+                        case 'DELETE':
+                            $controller->removeFromCart($id);
+                            break;
+                        default:
+                            throw new Exception('不支持的请求方法');
+                    }
                 break;
+
     
             // 订单由
             case 'orders':

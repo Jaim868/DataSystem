@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, Modal, Form, Input, InputNumber, Upload, message, Popconfirm } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, InputNumber, Upload, message, Popconfirm, Select } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import axios from 'axios';
@@ -12,10 +12,9 @@ interface Product {
   category: string;
   image_url: string;
   stock: number;
-  sales: number;
   rating: number;
-  created_at: string;
-  updated_at: string;
+  store_id: number | null;
+  store_name: string | null;
 }
 
 interface ApiError {
@@ -27,14 +26,26 @@ const ProductManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [form] = Form.useForm();
 
   // 获取商品列表
-  const fetchProducts = async () => {
+  const fetchProducts = async (storeId?: number) => {
     setLoading(true);
+    setProducts([]); // 先清空现有数据
     try {
-      const response = await axios.get('/api/admin/products');
-      setProducts(Array.isArray(response.data) ? response.data : []);
+      const url = storeId 
+        ? `/api/admin/products?store_id=${storeId}`
+        : '/api/admin/products';
+      const response = await axios.get(url);
+      if (response.data && Array.isArray(response.data)) {
+        setProducts(response.data);
+      } else {
+        setProducts([]);
+        message.error('获取商品列表失败：数据格式错误');
+      }
     } catch (error) {
       message.error('获取商品列表失败');
       console.error(error);
@@ -44,9 +55,40 @@ const ProductManagement: React.FC = () => {
     }
   };
 
+  // 每当商店选择改变时，重置页码并刷新数据
+  const handleStoreChange = (value: number | null) => {
+    setSelectedStoreId(value);
+    setCurrentPage(1);
+    fetchProducts(value || undefined);
+  };
+
+  // 处理页码变化
+  const handlePageChange = (page: number, size?: number) => {
+    setCurrentPage(page);
+    if (size && size !== pageSize) {
+      setPageSize(size);
+    }
+    fetchProducts(selectedStoreId || undefined);
+  };
+
   useEffect(() => {
     fetchProducts();
+    return () => {
+      setProducts([]);
+    };
   }, []);
+
+  // 处理删除商品
+  const handleDelete = async (id: number) => {
+    try {
+      await axios.delete(`/api/admin/products/${id}`);
+      message.success('商品删除成功');
+      // 删除后刷新当前页数据
+      fetchProducts(selectedStoreId || undefined);
+    } catch (error) {
+      message.error('删除失败');
+    }
+  };
 
   // 处理表单提交
   const handleSubmit = async (values: any) => {
@@ -68,7 +110,7 @@ const ProductManagement: React.FC = () => {
 
       let response;
       if (editingProduct) {
-        // 编辑商品 - 使用POST方法，添加_method字段来模拟PUT
+        // 编辑商品
         formData.append('_method', 'PUT');
         response = await axios.post(`/api/admin/products/${editingProduct.id}`, formData, {
           headers: {
@@ -88,24 +130,14 @@ const ProductManagement: React.FC = () => {
         message.success(response.data.message || (editingProduct ? '商品更新成功' : '商品添加成功'));
         setModalVisible(false);
         form.resetFields();
-        fetchProducts();
+        // 提交后刷新数据
+        fetchProducts(selectedStoreId || undefined);
       } else {
         throw new Error(response.data.message || response.data.error || '操作失败');
       }
     } catch (error: any) {
       console.error('操作失败:', error);
       message.error(error.response?.data?.message || error.message || '操作失败');
-    }
-  };
-
-  // 处理删除商品
-  const handleDelete = async (id: number) => {
-    try {
-      await axios.delete(`/api/admin/products/${id}`);
-      message.success('商品删除成功');
-      fetchProducts();
-    } catch (error) {
-      message.error('删除失败');
     }
   };
 
@@ -124,6 +156,11 @@ const ProductManagement: React.FC = () => {
       key: 'name',
     },
     {
+      title: '所属商店',
+      dataIndex: 'store_name',
+      key: 'store_name',
+    },
+    {
       title: '价格',
       dataIndex: 'price',
       key: 'price',
@@ -135,9 +172,10 @@ const ProductManagement: React.FC = () => {
       key: 'stock',
     },
     {
-      title: '销量',
-      dataIndex: 'sales',
-      key: 'sales',
+      title: '评分',
+      dataIndex: 'rating',
+      key: 'rating',
+      render: (rating: number) => rating.toFixed(1),
     },
     {
       title: '操作',
@@ -177,24 +215,52 @@ const ProductManagement: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={() => {
-          setEditingProduct(null);
-          form.resetFields();
-          setModalVisible(true);
-        }}
-        style={{ marginBottom: '16px' }}
-      >
-        添加商品
-      </Button>
+      <Space style={{ marginBottom: '16px' }}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => {
+            setEditingProduct(null);
+            form.resetFields();
+            setModalVisible(true);
+          }}
+        >
+          添加商品
+        </Button>
+        <Select
+          style={{ width: 200 }}
+          placeholder="选择商店筛选"
+          allowClear
+          value={selectedStoreId}
+          onChange={handleStoreChange}
+        >
+          {Array.from(new Set(products.map(p => p.store_id)))
+            .filter(id => id !== null)
+            .map(storeId => {
+              const store = products.find(p => p.store_id === storeId);
+              return (
+                <Select.Option key={storeId} value={storeId}>
+                  {store?.store_name}
+                </Select.Option>
+              );
+            })}
+        </Select>
+      </Space>
 
       <Table
         columns={columns}
-        dataSource={products || []}
+        dataSource={products}
         rowKey="id"
         loading={loading}
+        pagination={{
+          current: currentPage,
+          pageSize: pageSize,
+          total: products.length,
+          showSizeChanger: true,
+          showTotal: (total) => `共 ${total} 条记录`,
+          showQuickJumper: true,
+          onChange: handlePageChange,
+        }}
       />
 
       <Modal
@@ -270,6 +336,24 @@ const ProductManagement: React.FC = () => {
             </Upload>
           </Form.Item>
 
+          <Form.Item
+            name="store_id"
+            label="所属商店"
+          >
+            <Select>
+              {Array.from(new Set(products.map(p => p.store_id)))
+                .filter(id => id !== null)
+                .map(storeId => {
+                  const store = products.find(p => p.store_id === storeId);
+                  return (
+                    <Select.Option key={storeId} value={storeId}>
+                      {store?.store_name}
+                    </Select.Option>
+                  );
+                })}
+            </Select>
+          </Form.Item>
+
           <Form.Item>
             <Button type="primary" htmlType="submit" block>
               {editingProduct ? '更新' : '添加'}
@@ -281,4 +365,4 @@ const ProductManagement: React.FC = () => {
   );
 };
 
-export default ProductManagement; 
+export default ProductManagement;

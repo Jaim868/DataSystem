@@ -74,16 +74,16 @@ const Cart: React.FC = () => {
 
   const removeItem = async (itemId: number) => {
     try {
-      const userId = localStorage.getItem('userId');
-      const response = await axios.delete(`/api/cart/${itemId}?userId=${userId}`);
-      
-      setCartItems(items => items.filter(item => item.id !== itemId));
-      message.success('商品已删除');
+        const response = await axios.delete(`/api/cart/${itemId}`);
+        
+        setCartItems(items => items.filter(item => item.id !== itemId));
+        message.success('商品已删除');
     } catch (error) {
-      message.error('删除商品失败');
-      console.error(error);
+        message.error('删除商品失败');
+        console.error(error);
     }
   };
+
 
   const handleCheckout = async () => {
     try {
@@ -140,14 +140,6 @@ const Cart: React.FC = () => {
     {
       title: '小计',
       render: (_, record) => `¥${(Number(record.price) * record.quantity).toFixed(2)}`,
-    },
-    {
-      title: '操作',
-      render: (_, record) => (
-        <Button type="link" danger onClick={() => removeItem(record.id)}>
-          删除
-        </Button>
-      ),
     },
   ];
 

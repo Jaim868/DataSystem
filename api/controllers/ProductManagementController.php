@@ -10,42 +10,74 @@ class ProductManagementController {
 
     public function getAll() {
         try {
-            $stmt = $this->db->prepare("
-                SELECT 
-                    id, 
-                    name, 
-                    price, 
-                    description, 
-                    category,
-                    image_url, 
-                    stock,
-                    sales,
-                    rating,
-                    created_at,
-                    updated_at
-                FROM product_management_view
-                ORDER BY created_at DESC
-            ");
-            $stmt->execute();
+            $storeId = $_GET['store_id'] ?? null;
+            error_log("Fetching products for store_id: " . $storeId);
+            
+            if ($storeId) {
+                // 如果选择了特定商店，获取该商店的库存
+                $query = "
+                    SELECT DISTINCT
+                        id,
+                        name,
+                        price,
+                        description,
+                        category,
+                        image_url,
+                        store_quantity as stock,
+                        rating,
+                        store_id,
+                        store_name
+                    FROM product_comprehensive_view
+                    WHERE store_id = ?
+                    ORDER BY id
+                ";
+                $stmt = $this->db->prepare($query);
+                $stmt->execute([$storeId]);
+            } else {
+                // 如果没有选择商店，显示所有商品
+                $query = "
+                    SELECT DISTINCT
+                        id,
+                        name,
+                        price,
+                        description,
+                        category,
+                        image_url,
+                        total_stock as stock,
+                        rating,
+                        store_id,
+                        store_name
+                    FROM product_comprehensive_view
+                    ORDER BY id
+                ";
+                $stmt = $this->db->prepare($query);
+                $stmt->execute();
+            }
+            
             $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // 处理数据格式
-            $formattedProducts = array_map(function($product) {
-                return [
+            error_log("Found " . count($products) . " products");
+            error_log("SQL Query: " . $query);
+            
+            if (empty($products)) {
+                return [];
+            }
+            
+            $formattedProducts = [];
+            foreach ($products as $product) {
+                $formattedProducts[] = [
                     'id' => (int)$product['id'],
                     'name' => $product['name'],
                     'price' => (float)$product['price'],
                     'description' => $product['description'],
                     'category' => $product['category'],
                     'image_url' => $product['image_url'],
-                    'stock' => (int)$product['stock'],
-                    'sales' => (int)$product['sales'],
+                    'stock' => (int)($product['stock'] ?? 0),
                     'rating' => (float)$product['rating'],
-                    'created_at' => $product['created_at'],
-                    'updated_at' => $product['updated_at']
+                    'store_id' => $product['store_id'] ? (int)$product['store_id'] : null,
+                    'store_name' => $product['store_name']
                 ];
-            }, $products);
-
+            }
+            
             return $formattedProducts;
         } catch(PDOException $e) {
             error_log('Get products error: ' . $e->getMessage());

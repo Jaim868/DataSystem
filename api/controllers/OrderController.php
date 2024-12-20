@@ -125,31 +125,47 @@ class OrderController {
             }
 
             $stmt = $this->db->prepare("
-                SELECT DISTINCT 
-                    order_no,
-                    total_amount,
-                    status,
-                    created_at,
-                    item_count,
-                    product_names
-                FROM order_comprehensive_view
-                WHERE user_id = ? AND auth_user_id = ?
+                SELECT 
+                    o.order_no,
+                    o.total_amount,
+                    o.status,
+                    o.created_at,
+                    oi.product_id,
+                    p.name,
+                    oi.quantity,
+                    oi.price
+                FROM orders o
+                JOIN order_items oi ON o.order_no = oi.order_no
+                JOIN products p ON oi.product_id = p.id
+                WHERE o.user_id = ?
+                ORDER BY o.created_at DESC
             ");
-            $stmt->execute([$userId, $userId]);
-            $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $stmt->execute([$userId]);
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // 确保数值类型正确
-            foreach ($orders as &$order) {
-                $order['total_amount'] = (float)$order['total_amount'];
-                $order['item_count'] = (int)$order['item_count'];
+            // 重组数据结构
+            $orders = [];
+            foreach ($results as $row) {
+                $orderNo = $row['order_no'];
+                if (!isset($orders[$orderNo])) {
+                    $orders[$orderNo] = [
+                        'order_no' => $orderNo,
+                        'total_amount' => (float)$row['total_amount'],
+                        'status' => $row['status'],
+                        'created_at' => $row['created_at'],
+                        'items' => []
+                    ];
+                }
                 
-                // 处理商品名称列表
-                $order['product_names'] = $order['product_names'] 
-                    ? explode(',', $order['product_names']) 
-                    : [];
+                $orders[$orderNo]['items'][] = [
+                    'product_id' => $row['product_id'],
+                    'name' => $row['name'],
+                    'quantity' => (int)$row['quantity'],
+                    'price' => (float)$row['price']
+                ];
             }
 
-            echo json_encode($orders);
+            echo json_encode(array_values($orders));
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['error' => $e->getMessage()]);
@@ -428,4 +444,4 @@ class OrderController {
             ]);
         }
     }
-} 
+}

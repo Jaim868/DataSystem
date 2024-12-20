@@ -215,9 +215,6 @@ const SupplierProducts: React.FC = () => {
       <Card>
         <Space style={{ marginBottom: 16, justifyContent: 'space-between', width: '100%' }}>
           <Title level={2}>商品管理</Title>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            添加商品
-          </Button>
         </Space>
 
         <Table

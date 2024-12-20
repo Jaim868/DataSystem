@@ -287,9 +287,6 @@ const ProductDetail: React.FC = () => {
               marginTop: '24px'
             }}>
               <Space size="large">
-                <Text type="secondary">
-                  销量: <Text strong>{product.sales}</Text>
-                </Text>
               </Space>
               <Space size="large">
                 <Text type="secondary">

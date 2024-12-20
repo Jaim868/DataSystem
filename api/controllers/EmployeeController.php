@@ -573,56 +573,39 @@ class EmployeeController {
             try {
                 // 检查员工是否存在
                 $stmt = $this->db->prepare("
-                    SELECT e.id, e.store_id, s.name as store_name 
-                    FROM employees e
-                    JOIN stores s ON e.store_id = s.id
-                    WHERE e.id = ?
-                ");
+                SELECT e.id, e.store_id, s.name as store_name 
+                FROM employees e
+                JOIN stores s ON e.store_id = s.id
+                WHERE e.id = ?
+            ");
                 $stmt->execute([$id]);
                 $employee = $stmt->fetch(PDO::FETCH_ASSOC);
-                
+
                 if (!$employee) {
                     throw new Exception('员工不存在');
                 }
 
-                // 检查是否有相关的订单
-                $stmt = $this->db->prepare("
-                    SELECT COUNT(*) as count FROM orders 
-                    WHERE store_id = ?
-                ");
-                $stmt->execute([$employee['store_id']]);
-                $result = $stmt->fetch(PDO::FETCH_ASSOC);
-                if ($result['count'] > 0) {
-                    throw new Exception("该员工所在商店({$employee['store_name']})存在订单记录，无法删除");
-                }
-
-                // 临时关闭外键检查
-                $this->db->exec('SET FOREIGN_KEY_CHECKS=0');
-
-                // 1. 删除员工记录
+                // 删除员工记录（先删除 employees 表中的记录）
                 $stmt = $this->db->prepare("DELETE FROM employees WHERE id = ?");
                 if (!$stmt->execute([$id])) {
                     throw new Exception('删除员工记录失败');
                 }
 
-                // 2. 删除用户账号
+                // 删除员工的账户记录（删除 users 表中的记录）
                 $stmt = $this->db->prepare("DELETE FROM users WHERE id = ?");
                 if (!$stmt->execute([$id])) {
                     throw new Exception('删除用户账号失败');
                 }
 
-                // 恢复外键检查
-                $this->db->exec('SET FOREIGN_KEY_CHECKS=1');
-
+                // 提交事务
                 $this->db->commit();
 
                 echo json_encode([
                     'success' => true,
-                    'message' => '员工删除成功'
+                    'message' => '员工及相关记录删除成功'
                 ]);
             } catch (Exception $e) {
-                // 确保恢复外键检查
-                $this->db->exec('SET FOREIGN_KEY_CHECKS=1');
+                // 回滚事务
                 $this->db->rollBack();
                 throw $e;
             }

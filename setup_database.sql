@@ -1,7 +1,8 @@
--- 设置外键检查
+
+-- Set foreign key checks
 SET FOREIGN_KEY_CHECKS=0;
 
--- 删除已存在的表
+-- Drop existing tables
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS cart_items;
@@ -15,7 +16,7 @@ DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS supply_orders;
 DROP TABLE IF EXISTS supply_order_items;
 
--- 创建用户表
+-- Create user table
 CREATE TABLE users (
     id INT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(50) NOT NULL UNIQUE,
@@ -27,7 +28,7 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- 创建商店表
+-- Create store table
 CREATE TABLE stores (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
@@ -37,7 +38,7 @@ CREATE TABLE stores (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- 创建员工表
+-- Create employee table
 CREATE TABLE employees (
     id INT PRIMARY KEY,
     store_id INT NOT NULL,
@@ -50,7 +51,7 @@ CREATE TABLE employees (
     FOREIGN KEY (store_id) REFERENCES stores(id)
 );
 
--- 创建供应商表
+-- Create supplier table
 CREATE TABLE suppliers (
     id INT PRIMARY KEY,
     company_name VARCHAR(100) NOT NULL,
@@ -62,7 +63,7 @@ CREATE TABLE suppliers (
     FOREIGN KEY (id) REFERENCES users(id)
 );
 
--- 创建商品表
+-- Create product table
 CREATE TABLE products (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
@@ -78,7 +79,7 @@ CREATE TABLE products (
     deleted_at TIMESTAMP NULL
 );
 
--- 创建商店库存表
+-- Create store_inventory table
 CREATE TABLE store_inventory (
     store_id INT NOT NULL,
     product_id INT NOT NULL,
@@ -90,7 +91,7 @@ CREATE TABLE store_inventory (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
--- 创建供应商产品关联表
+-- Create supplier_product_association table
 CREATE TABLE supplier_products (
     supplier_id INT NOT NULL,
     product_id INT NOT NULL,
@@ -100,7 +101,7 @@ CREATE TABLE supplier_products (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
--- 创建购物车表
+-- Create shopping_cart table
 CREATE TABLE cart_items (
     id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NOT NULL,
@@ -112,7 +113,7 @@ CREATE TABLE cart_items (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
--- 创建订单表
+-- Create order table
 CREATE TABLE orders (
     order_no VARCHAR(20) PRIMARY KEY,
     user_id INT NOT NULL,
@@ -125,7 +126,7 @@ CREATE TABLE orders (
     FOREIGN KEY (store_id) REFERENCES stores(id)
 );
 
--- 创建订单项目表
+-- Create order items table
 CREATE TABLE order_items (
     id INT PRIMARY KEY AUTO_INCREMENT,
     order_no VARCHAR(20) NOT NULL,
@@ -136,7 +137,7 @@ CREATE TABLE order_items (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
--- 创建供应订单表（供应商发货给商店的订单）
+-- Create supply order table (orders from suppliers to stores)
 CREATE TABLE supply_orders (
     order_no VARCHAR(50) PRIMARY KEY,
     supplier_id INT NOT NULL,
@@ -149,7 +150,7 @@ CREATE TABLE supply_orders (
     FOREIGN KEY (store_id) REFERENCES stores(id)
 );
 
--- 创建供应订单项目表
+-- Create supply order item table
 CREATE TABLE supply_order_items (
     id INT PRIMARY KEY AUTO_INCREMENT,
     order_no VARCHAR(50) NOT NULL,
@@ -160,8 +161,29 @@ CREATE TABLE supply_order_items (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
--- 插入测试数据
--- 创建用户
+ALTER TABLE stores
+ADD COLUMN is_deleted TINYINT(1) DEFAULT 0 NOT NULL COMMENT '逻辑删除标志',
+ADD COLUMN deleted_at DATETIME NULL COMMENT '逻辑删除时间';
+
+
+ALTER TABLE store_inventory
+ADD COLUMN is_deleted TINYINT(1) DEFAULT 0 NOT NULL COMMENT '逻辑删除标志';
+
+ALTER TABLE orders
+ADD COLUMN is_deleted TINYINT(1) DEFAULT 0 NOT NULL COMMENT '逻辑删除标志';
+
+ALTER TABLE employees
+ADD COLUMN is_deleted TINYINT(1) DEFAULT 0 NOT NULL COMMENT '逻辑删除标志';
+
+ALTER TABLE products
+ADD COLUMN is_deleted TINYINT(1) DEFAULT 0 NOT NULL COMMENT '逻辑删除标志';
+
+ALTER TABLE cart_items
+ADD COLUMN is_deleted TINYINT(1) DEFAULT 0 NOT NULL COMMENT '逻辑删除标志';
+
+
+-- Insert test data  
+-- Create user
 INSERT INTO users (id, username, password, role, email, phone) 
 VALUES 
 (1, 'admin', 'admin123', 'manager', 'admin@fishing.com', '13800000001'),
@@ -266,172 +288,172 @@ VALUES
 (100, 'customer29', 'customer0123', 'customer', 'customer29@example.com', '13800000100');
 
 
--- 创建商店
+-- Create Stores
 INSERT INTO stores (id, name, address, phone) 
 VALUES
-(1, '渔具分店1', '北京市朝阳区1号', '010-12345678'),
-(2, '渔具分店2', '天津市和平区2号', '022-23456789'),
-(3, '渔具分店3', '上海市浦东新区123号', '021-12345678'),
-(4, '渔具分店4', '广州市越秀区456号', '020-87654321'),
-(5, '渔具分店5', '深圳市南山区789号', '0755-56789012'),
-(6, '渔具分店6', '杭州市西湖区10号', '0571-34567890'),
-(7, '渔具分店7', '成都市锦江区11号', '028-12389012'),
-(8, '渔具分店8', '南京市玄武区12号', '025-34567812'),
-(9, '渔具分店9', '苏州市工业园区13号', '0512-12345689'),
-(10, '渔具分店10', '武汉市江汉区14号', '027-56789013'),
-(11, '渔具分店11', '西安市未央区15号', '029-23456780'),
-(12, '渔具分店12', '长沙市岳麓区16号', '0731-67890123'),
-(13, '渔具分店13', '重庆市渝北区17号', '023-98765432'),
-(14, '渔具分店14', '郑州市中原区18号', '0371-12389045'),
-(15, '渔��分店15', '青岛市崂山区19号', '0532-23456781'),
-(16, '渔具分店16', '福州市鼓楼区20号', '0591-67890134'),
-(17, '渔具分店17', '厦门市思明区21号', '0592-34567891'),
-(18, '渔具分店18', '合肥市庐阳区22号', '0551-56789014'),
-(19, '渔具分店19', '南昌市东湖区23���', '0791-67890145'),
-(20, '渔具分店20', '昆明市盘龙区24号', '0871-12345690');
+(1, 'Fishing Gear Branch 1', 'No. 1, Chaoyang District, Beijing', '010-12345678'),
+(2, 'Fishing Gear Branch 2', 'No. 2, Heping District, Tianjin', '022-23456789'),
+(3, 'Fishing Gear Branch 3', 'No. 123, Pudong New District, Shanghai', '021-12345678'),
+(4, 'Fishing Gear Branch 4', 'No. 456, Yuexiu District, Guangzhou', '020-87654321'),
+(5, 'Fishing Gear Branch 5', 'No. 789, Nanshan District, Shenzhen', '0755-56789012'),
+(6, 'Fishing Gear Branch 6', 'No. 10, Xihu District, Hangzhou', '0571-34567890'),
+(7, 'Fishing Gear Branch 7', 'No. 11, Jinjiang District, Chengdu', '028-12389012'),
+(8, 'Fishing Gear Branch 8', 'No. 12, Xuanwu District, Nanjing', '025-34567812'),
+(9, 'Fishing Gear Branch 9', 'No. 13, Suzhou Industrial Park, Suzhou', '0512-12345689'),
+(10, 'Fishing Gear Branch 10', 'No. 14, Jianghan District, Wuhan', '027-56789013'),
+(11, 'Fishing Gear Branch 11', 'No. 15, Weiyang District, Xi\'an', '029-23456780'),
+(12, 'Fishing Gear Branch 12', 'No. 16, Yuelu District, Changsha', '0731-67890123'),
+(13, 'Fishing Gear Branch 13', 'No. 17, Yubei District, Chongqing', '023-98765432'),
+(14, 'Fishing Gear Branch 14', 'No. 18, Zhongyuan District, Zhengzhou', '0371-12389045'),
+(15, 'Fishing Gear Branch 15', 'No. 19, Laoshan District, Qingdao', '0532-23456781'),
+(16, 'Fishing Gear Branch 16', 'No. 20, Gulou District, Fuzhou', '0591-67890134'),
+(17, 'Fishing Gear Branch 17', 'No. 21, Siming District, Xiamen', '0592-34567891'),
+(18, 'Fishing Gear Branch 18', 'No. 22, Luyang District, Hefei', '0551-56789014'),
+(19, 'Fishing Gear Branch 19', 'No. 23, Donghu District, Nanchang', '0791-67890145'),
+(20, 'Fishing Gear Branch 20', 'No. 24, Panlong District, Kunming', '0871-12345690');
 
 
--- 创建员工
+
+-- Create employees
 INSERT INTO employees (id, store_id, hire_date, salary, position) 
 VALUES
-(50, 1, '2022-01-01', 6000.00, '店长'),
-(51, 4, '2022-06-01', 5500.00, '副店长'),
-(52, 2, '2023-01-01', 5000.00, '销售'),
-(53, 19, '2023-02-01', 5000.00, '销售'),
-(54, 12, '2023-03-01', 5000.00, '销售'),
-(55, 15, '2022-07-01', 6000.00, '店长'),
-(56, 10, '2023-04-01', 5500.00, '副店长'),
-(57, 8, '2023-04-01', 4500.00, '收银员'),
-(58, 7, '2023-05-01', 5000.00, '销售'),
-(59, 6, '2023-06-01', 4000.00, '收银员'),
-(60, 14, '2022-09-01', 6500.00, '店长'),
-(61, 1, '2023-07-01', 5500.00, '副店长'),
-(62, 9, '2022-10-01', 6000.00, '店长'),
-(63, 16, '2023-08-01', 5000.00, '销售'),
-(64, 5, '2023-09-01', 4500.00, '收银员'),
-(65, 11, '2023-10-01', 5000.00, '销售'),
-(66, 3, '2022-11-01', 6000.00, '店长'),
-(67, 18, '2023-11-01', 5500.00, '副店长'),
-(68, 4, '2022-12-01', 6000.00, '店长'),
-(69, 13, '2023-12-01', 5000.00, '销售'),
-(70, 2, '2022-01-01', 7000.00, '店长'),
-(71, 6, '2022-06-01', 6000.00, '副店长'),
-(72, 3, '2023-01-01', 5500.00, '销售'),
-(73, 19, '2023-02-01', 5000.00, '销售'),
-(74, 10, '2023-03-01', 5000.00, '销售'),
-(75, 13, '2022-07-01', 7000.00, '店长'),
-(76, 8, '2022-08-01', 6500.00, '副店长'),
-(77, 7, '2023-04-01', 4500.00, '收银员'),
-(78, 18, '2023-05-01', 5000.00, '销售'),
-(79, 12, '2023-06-01', 4000.00, '收银员'),
-(80, 5, '2022-09-01', 7500.00, '店长'),
-(81, 14, '2023-07-01', 6500.00, '副店长'),
-(82, 3, '2022-10-01', 6000.00, '店长'),
-(83, 8, '2023-08-01', 5000.00, '销售'),
-(84, 2, '2023-09-01', 4500.00, '收银员'),
-(85, 16, '2023-10-01', 5000.00, '销售'),
-(86, 9, '2022-11-01', 7000.00, '店长'),
-(87, 13, '2023-11-01', 6500.00, '副店长'),
-(88, 1, '2022-12-01', 6000.00, '店长'),
-(89, 4, '2023-12-01', 5000.00, '销售'),
-(90, 12, '2022-01-01', 8000.00, '店长'),
-(91, 10, '2022-06-01', 7000.00, '副店长'),
-(92, 16, '2023-01-01', 6000.00, '销售'),
-(93, 15, '2023-02-01', 5500.00, '销售'),
-(94, 2, '2023-03-01', 5000.00, '销售'),
-(95, 5, '2022-07-01', 8000.00, '店长'),
-(96, 20, '2022-08-01', 7500.00, '副店长'),
-(97, 17, '2023-04-01', 4500.00, '收银员'),
-(98, 18, '2023-05-01', 5000.00, '销售'),
-(99, 14, '2023-06-01', 4000.00, '收银员');
+(50, 1, '2022-01-01', 6000.00, 'Store Manager'),
+(51, 4, '2022-06-01', 5500.00, 'Deputy Store Manager'),
+(52, 2, '2023-01-01', 5000.00, 'Sales'),
+(53, 19, '2023-02-01', 5000.00, 'Sales'),
+(54, 12, '2023-03-01', 5000.00, 'Sales'),
+(55, 15, '2022-07-01', 6000.00, 'Store Manager'),
+(56, 10, '2023-04-01', 5500.00, 'Deputy Store Manager'),
+(57, 8, '2023-04-01', 4500.00, 'Cashier'),
+(58, 7, '2023-05-01', 5000.00, 'Sales'),
+(59, 6, '2023-06-01', 4000.00, 'Cashier'),
+(60, 14, '2022-09-01', 6500.00, 'Store Manager'),
+(61, 1, '2023-07-01', 5500.00, 'Deputy Store Manager'),
+(62, 9, '2022-10-01', 6000.00, 'Store Manager'),
+(63, 16, '2023-08-01', 5000.00, 'Sales'),
+(64, 5, '2023-09-01', 4500.00, 'Cashier'),
+(65, 11, '2023-10-01', 5000.00, 'Sales'),
+(66, 3, '2022-11-01', 6000.00, 'Store Manager'),
+(67, 18, '2023-11-01', 5500.00, 'Deputy Store Manager'),
+(68, 4, '2022-12-01', 6000.00, 'Store Manager'),
+(69, 13, '2023-12-01', 5000.00, 'Sales'),
+(70, 2, '2022-01-01', 7000.00, 'Store Manager'),
+(71, 6, '2022-06-01', 6000.00, 'Deputy Store Manager'),
+(72, 3, '2023-01-01', 5500.00, 'Sales'),
+(73, 19, '2023-02-01', 5000.00, 'Sales'),
+(74, 10, '2023-03-01', 5000.00, 'Sales'),
+(75, 13, '2022-07-01', 7000.00, 'Store Manager'),
+(76, 8, '2022-08-01', 6500.00, 'Deputy Store Manager'),
+(77, 7, '2023-04-01', 4500.00, 'Cashier'),
+(78, 18, '2023-05-01', 5000.00, 'Sales'),
+(79, 12, '2023-06-01', 4000.00, 'Cashier'),
+(80, 5, '2022-09-01', 7500.00, 'Store Manager'),
+(81, 14, '2023-07-01', 6500.00, 'Deputy Store Manager'),
+(82, 3, '2022-10-01', 6000.00, 'Store Manager'),
+(83, 8, '2023-08-01', 5000.00, 'Sales'),
+(84, 2, '2023-09-01', 4500.00, 'Cashier'),
+(85, 16, '2023-10-01', 5000.00, 'Sales'),
+(86, 9, '2022-11-01', 7000.00, 'Store Manager'),
+(87, 13, '2023-11-01', 6500.00, 'Deputy Store Manager'),
+(88, 1, '2022-12-01', 6000.00, 'Store Manager'),
+(89, 4, '2023-12-01', 5000.00, 'Sales'),
+(90, 12, '2022-01-01', 8000.00, 'Store Manager'),
+(91, 10, '2022-06-01', 7000.00, 'Deputy Store Manager'),
+(92, 16, '2023-01-01', 6000.00, 'Sales'),
+(93, 15, '2023-02-01', 5500.00, 'Sales'),
+(94, 2, '2023-03-01', 5000.00, 'Sales'),
+(95, 5, '2022-07-01', 8000.00, 'Store Manager'),
+(96, 20, '2022-08-01', 7500.00, 'Deputy Store Manager'),
+(97, 17, '2023-04-01', 4500.00, 'Cashier'),
+(98, 18, '2023-05-01', 5000.00, 'Sales'),
+(99, 14, '2023-06-01', 4000.00, 'Cashier');
 
-
--- 创建供应商
+-- Create suppliers
 INSERT INTO suppliers (id, company_name, contact_name, phone, address) 
 VALUES
-(1, '渔具供应商1', '张三', '13900000001', '广州市天河区123号'),
-(2, '渔具供应商2', '李四', '13900000002', '北京市朝阳区456号'),
-(3, '渔具供应商3', '王五', '13900000003', '上海市徐汇区789号'),
-(4, '渔具供应商4', '赵六', '13900000004', '深圳市南山区101号'),
-(5, '渔具供应商5', '孙七', '13900000005', '杭州市西湖区202号'),
-(6, '渔具供应商6', '周八', '13900000006', '成都市锦江区303号'),
-(7, '渔具供应商7', '吴九', '13900000007', '南京市玄武区404号'),
-(8, '渔具供应商8', '郑十', '13900000008', '武汉市江汉区505号'),
-(9, '渔具供应商9', '钱十一', '13900000009', '长沙市岳麓区606号'),
-(10, '渔具供应商10', '冯十二', '13900000010', '青岛市崂山区707号'),
-(11, '渔具供应商11', '陈十三', '13900000011', '西安市未央区808号'),
-(12, '渔具供应商12', '褚十四', '13900000012', '郑州市中原区909号'),
-(13, '渔具供应商13', '卫十五', '13900000013', '重庆市渝北区100号'),
-(14, '渔具供应商14', '蒋十六', '13900000014', '南昌市东湖区111号'),
-(15, '渔具供应商15', '沈十七', '13900000015', '昆明市盘龙区222号'),
-(16, '渔具供应商16', '韩十八', '13900000016', '贵阳市云岩区333号'),
-(17, '渔具供应商17', '杨十九', '13900000017', '南宁市青秀区444号'),
-(18, '渔具供应商18', '朱二十', '13900000018', '哈尔滨市道里区555号'),
-(19, '渔具供应商19', '秦二十一', '13900000019', '长春市朝阳区666号'),
-(20, '渔具供应商20', '尤二十二', '13900000020', '沈阳市和平区777号'),
-(30, '渔具供应商1', '张三', '13900000001', '广州市天河区123号'),
-(31, '渔具供应商2', '李四', '13900000002', '北京市朝阳区456号'),
-(32, '渔具供应商3', '王五', '13900000003', '上海市徐汇区789号'),
-(33, '渔具供应商4', '赵六', '13900000004', '深圳市南山区101号'),
-(34, '渔具供应商5', '孙七', '13900000005', '杭州市西湖区202号');
+(1, 'Fishing Supplier 1', 'Zhang San', '13900000001', 'No. 123, Tianhe District, Guangzhou'),
+(2, 'Fishing Supplier 2', 'Li Si', '13900000002', 'No. 456, Chaoyang District, Beijing'),
+(3, 'Fishing Supplier 3', 'Wang Wu', '13900000003', 'No. 789, Xuhui District, Shanghai'),
+(4, 'Fishing Supplier 4', 'Zhao Liu', '13900000004', 'No. 101, Nanshan District, Shenzhen'),
+(5, 'Fishing Supplier 5', 'Sun Qi', '13900000005', 'No. 202, Xihu District, Hangzhou'),
+(6, 'Fishing Supplier 6', 'Zhou Ba', '13900000006', 'No. 303, Jinjiang District, Chengdu'),
+(7, 'Fishing Supplier 7', 'Wu Jiu', '13900000007', 'No. 404, Xuanwu District, Nanjing'),
+(8, 'Fishing Supplier 8', 'Zheng Shi', '13900000008', 'No. 505, Jianghan District, Wuhan'),
+(9, 'Fishing Supplier 9', 'Qian Shi Yi', '13900000009', 'No. 606, Yuelu District, Changsha'),
+(10, 'Fishing Supplier 10', 'Feng Shi Er', '13900000010', 'No. 707, Laoshan District, Qingdao'),
+(11, 'Fishing Supplier 11', 'Chen Shi San', '13900000011', 'No. 808, Weiyang District, Xi\'an'),
+(12, 'Fishing Supplier 12', 'Chu Shi Si', '13900000012', 'No. 909, Zhongyuan District, Zhengzhou'),
+(13, 'Fishing Supplier 13', 'Wei Shi Wu', '13900000013', 'No. 100, Yubei District, Chongqing'),
+(14, 'Fishing Supplier 14', 'Jiang Shi Liu', '13900000014', 'No. 111, Donghu District, Nanchang'),
+(15, 'Fishing Supplier 15', 'Shen Shi Qi', '13900000015', 'No. 222, Panlong District, Kunming'),
+(16, 'Fishing Supplier 16', 'Han Shi Ba', '13900000016', 'No. 333, Yunyan District, Guiyang'),
+(17, 'Fishing Supplier 17', 'Yang Shi Jiu', '13900000017', 'No. 444, Qingxiu District, Nanning'),
+(18, 'Fishing Supplier 18', 'Zhu Er Shi', '13900000018', 'No. 555, Daoli District, Harbin'),
+(19, 'Fishing Supplier 19', 'Qin Er Shi Yi', '13900000019', 'No. 666, Chaoyang District, Changchun'),
+(20, 'Fishing Supplier 20', 'You Er Shi Er', '13900000020', 'No. 777, Heping District, Shenyang'),
+(30, 'Fishing Supplier 1', 'Zhang San', '13900000001', '123 Tianhe District, Guangzhou'),
+(31, 'Fishing Supplier 2', 'Li Si', '13900000002', '456 Chaoyang District, Beijing'),
+(32, 'Fishing Supplier 3', 'Wang Wu', '13900000003', '789 Xuhui District, Shanghai'),
+(33, 'Fishing Supplier 4', 'Zhao Liu', '13900000004', '101 Nanshan District, Shenzhen'),
+(34, 'Fishing Supplier 5', 'Sun Qi', '13900000005', '202 Xihu District, Hangzhou');
 
 
 
--- 创建商品
+-- Create products
 INSERT INTO products (id, name, description, price, category, image_url, stock, rating, sales) 
 VALUES
-(1, '专业钓鱼竿', '碳纤维材质，轻便耐用', 299.99, '鱼竿', '/images/rod1.jpg', 100, 4.8, 100),
-(2, '高级渔线', '超强拉力不易断裂', 49.99, '渔线', '/images/line1.jpg', 200, 4.5, 150),
-(3, '精致鱼钩', '日本进口，锋利持久', 19.99, '鱼钩', '/images/hook1.jpg', 500, 4.7, 50),
-(4, '多功能鱼篓', '大容量，防水耐用', 159.99, '工具', '/images/bascket1.jpg', 80, 4.6, 125),
-(5, '专业钓椅', '便携折叠，承重150kg', 199.99, '工具', '/images/chair.jpg', 60, 4.9, 100),
-(6, '高级饵料', '进口配方，效果显著', 29.99, '饵料', '/images/bait1.jpg', 400, 4.4, 130),
-(7, '防晒钓鱼帽', '透气防晒，舒适耐用', 89.99, '服饰', '/images/hat1.jpg', 150, 4.3, 150),
-(8, '防水钓鱼服', '高品质防水面料', 399.99, '服饰', '/images/cloth1.jpg', 100, 4.7, 50),
-(9, '钓鱼工具箱', '多层收纳，防水防潮', 129.99, '工具', '/images/box1.jpg', 120, 4.5, 100),
-(10, '电子咬钩器', '灵敏度高，防水设计', 79.99, '工具', '/images/bite1.jpg', 200, 4.6, 135),
-(11, '便携鱼竿包', '防水耐磨，轻便便携', 59.99, '工具', '/images/rod1.jpg', 140, 4.2, 115),
-(12, '专业鱼线轮', '金属材质，操作流畅', 349.99, '工具', '/images/line1.jpg', 90, 4.8, 100),
-(13, '钓鱼太阳镜', '防紫外线，高清视野', 199.99, '服饰', '/images/hat1.jpg', 75, 4.6, 90),
-(14, '户外钓鱼鞋', '防滑防水，舒适透气', 299.99, '服饰', '/images/cloth1.jpg', 65, 4.7, 100),
-(15, '夜光浮漂', '高亮度，灵敏度高', 39.99, '工具', '/images/bascket1.jpg', 300, 4.5, 125),
-(16, '多功能鱼竿支架', '高度可调，稳固耐用', 99.99, '工具', '/images/chair.jpg', 110, 4.4, 105),
-(17, '折叠钓鱼伞', '防晒防雨，便携耐用', 159.99, '工具', '/images/chair.jpg', 100, 4.5, 50),
-(18, '小型鱼探仪', '高精度探测，操作便捷', 899.99, '电子', '/images/bite1.jpg', 30, 4.9, 45),
-(19, '防水钓鱼背包', '多隔层设计，容量大', 199.99, '工具', '/images/box1.jpg', 120, 4.6, 105),
-(20, '户外水壶', '保温保冷，轻便携带', 89.99, '工具', '/images/bascket1.jpg', 180, 4.3, 80),
-(21, '夜光鱼钩', '高亮夜光，锋利耐用', 24.99, '鱼钩', '/images/hook1.jpg', 350, 4.6, 150),
-(22, '智能咬钩报警器', '声音报警，操作简便', 99.99, '电子', '/images/bite1.jpg', 90, 4.7, 135),
-(23, '高灵敏度浮漂', '精准检测，灵敏度高', 49.99, '工具', '/images/bascket1.jpg', 250, 4.5, 115),
-(24, '防蚊钓鱼服', '防蚊透气，舒适耐用', 349.99, '服饰', '/images/cloth1.jpg', 85, 4.4, 75),
-(25, '户外多功能刀', '锋利便携，多功能用途', 129.99, '工具', '/images/chair.jpg', 140, 4.8, 110),
-(26, '大号钓鱼桶', '防水保温，坚固耐用', 99.99, '工具', '/images/chair.jpg', 95, 4.5, 80),
-(27, '鱼饵保存盒', '密封防潮，携带方便', 39.99, '工具', '/images/bait1.jpg', 320, 4.4, 25),
-(28, '轻量鱼竿', '碳纤维材质，便携耐用', 249.99, '鱼竿', '/images/rod1.jpg', 80, 4.7, 75),
-(29, '竞技鱼线', '高强度，低延展性', 59.99, '渔线', '/images/line1.jpg', 180, 4.6, 30),
-(30, '鱼竿保护套', '柔软耐磨，保护鱼竿', 29.99, '工具', '/images/box1.jpg', 210, 4.3, 90),
-(31, '折叠鱼篓', '轻便易收纳，大容量', 79.99, '工具', '/images/bascket1.jpg', 120, 4.4, 90),
-(32, '户外钓鱼帽', '防风防晒，透气设计', 99.99, '服饰', '/images/hat1.jpg', 150, 4.3, 140),
-(33, 'LED鱼漂灯', '节能高亮，夜钓必备', 19.99, '工具', '/images/bascket1.jpg', 400, 4.5, 60),
-(34, '鱼饵干燥剂', '高效吸湿，保持饵料干燥', 9.99, '工具', '/images/bait1.jpg', 500, 4.3, 130),
-(35, '防水手机套', '保护手机，便捷使用', 39.99, '工具', '/images/bascket1.jpg', 150, 4.4, 150),
-(36, '鱼线切割器', '锋利耐用，安全便捷', 29.99, '工具', '/images/chair.jpg', 250, 4.6, 60),
-(37, '钓鱼护目镜', '防眩光，高清视野', 179.99, '服饰', '/images/hat1.jpg', 60, 4.5, 90),
-(38, '钓鱼坐垫', '柔软舒适，轻便耐用', 89.99, '工具', '/images/chair.jpg', 100, 4.4, 90),
-(39, '高级鱼饵', '营养丰富，吸引力强', 39.99, '饵料', '/images/bait1.jpg', 350, 4.5, 80),
-(40, '水下摄像头', '高清画质，操作便捷', 1199.99, '电子', '/images/bite1.jpg', 20, 4.8, 85),
-(41, '钓鱼头灯', '多档调节，防水设计', 59.99, '工具', '/images/bascket1.jpg', 140, 4.6, 60),
-(42, '冰钓工具套装', '全套装备，一站式服务', 899.99, '工具', '/images/chair.jpg', 25, 4.9, 80),
-(43, '防晒冰袖', '透气舒适，防晒效果佳', 19.99, '服饰', '/images/hat1.jpg', 180, 4.3, 40),
-(44, '高级夜钓漂', '灵敏高亮，夜钓利器', 29.99, '工具', '/images/bascket1.jpg', 250, 4.5, 135),
-(45, '钓鱼手套', '防滑耐磨，舒适贴合', 49.99, '服饰', '/images/hat1.jpg', 120, 4.4, 60),
-(46, '海钓钓具套装', '专业配置，海钓必备', 1599.99, '工具', '/images/chair.jpg', 15, 4.9, 100),
-(47, '便携折叠水桶', '轻便耐用，防水设计', 29.99, '工具', '/images/chair.jpg', 200, 4.3, 50),
-(48, '鱼饵搅拌机', '高效均匀，便捷省力', 199.99, '工具', '/images/bait1.jpg', 45, 4.6, 85),
-(49, '户外折叠桌', '轻便实用，承重耐用', 129.99, '工具', '/images/chair.jpg', 75, 4.5, 70),
-(50, '鱼钩磨刀器', '小巧便携，锋利持久', 49.99, '工具', '/images/chair.jpg', 300, 4.6, 85);
+(1, 'Professional Fishing Rod', 'Made of carbon fiber, lightweight and durable', 299.99, 'Rod', '/images/rod1.jpg', 100, 4.8, 100),
+(2, 'Premium Fishing Line', 'Super strong, not easy to break', 49.99, 'Line', '/images/line1.jpg', 200, 4.5, 150),
+(3, 'Exquisite Fish Hook', 'Imported from Japan, sharp and durable', 19.99, 'Hook', '/images/hook1.jpg', 500, 4.7, 50),
+(4, 'Multi-functional Fish Basket', 'Large capacity, waterproof and durable', 159.99, 'Tool', '/images/bascket1.jpg', 80, 4.6, 125),
+(5, 'Professional Fishing Chair', 'Portable folding, weight capacity 150kg', 199.99, 'Tool', '/images/chair.jpg', 60, 4.9, 100),
+(6, 'Premium Bait', 'Imported formula, effective', 29.99, 'Bait', '/images/bait1.jpg', 400, 4.4, 130),
+(7, 'Sun Protection Fishing Hat', 'Breathable, sun protection, comfortable and durable', 89.99, 'Clothing', '/images/hat1.jpg', 150, 4.3, 150),
+(8, 'Waterproof Fishing Suit', 'High-quality waterproof fabric', 399.99, 'Clothing', '/images/cloth1.jpg', 100, 4.7, 50),
+(9, 'Fishing Tackle Box', 'Multi-layer storage, waterproof and moisture-proof', 129.99, 'Tool', '/images/box1.jpg', 120, 4.5, 100),
+(10, 'Electronic Bite Alarm', 'High sensitivity, waterproof design', 79.99, 'Tool', '/images/bite1.jpg', 200, 4.6, 135),
+(11, 'Portable Fishing Rod Bag', 'Waterproof, wear-resistant, lightweight and portable', 59.99, 'Tool', '/images/rod1.jpg', 140, 4.2, 115),
+(12, 'Professional Fishing Reel', 'Metal material, smooth operation', 349.99, 'Tool', '/images/line1.jpg', 90, 4.8, 100),
+(13, 'Fishing Sunglasses', 'UV protection, high-definition vision', 199.99, 'Clothing', '/images/hat1.jpg', 75, 4.6, 90),
+(14, 'Outdoor Fishing Shoes', 'Anti-slip, waterproof, comfortable and breathable', 299.99, 'Clothing', '/images/cloth1.jpg', 65, 4.7, 100),
+(15, 'Luminous Float', 'High brightness, high sensitivity', 39.99, 'Tool', '/images/bascket1.jpg', 300, 4.5, 125),
+(16, 'Multi-functional Fishing Rod Holder', 'Adjustable height, stable and durable', 99.99, 'Tool', '/images/chair.jpg', 110, 4.4, 105),
+(17, 'Folding Fishing Umbrella', 'Sun and rain protection, portable and durable', 159.99, 'Tool', '/images/chair.jpg', 100, 4.5, 50),
+(18, 'Small Fish Finder', 'High-precision detection, easy to operate', 899.99, 'Electronics', '/images/bite1.jpg', 30, 4.9, 45),
+(19, 'Waterproof Fishing Backpack', 'Multi-compartment design, large capacity', 199.99, 'Tool', '/images/box1.jpg', 120, 4.6, 105),
+(20, 'Outdoor Water Bottle', 'Insulated, lightweight and portable', 89.99, 'Tool', '/images/bascket1.jpg', 180, 4.3, 80),
+(21, 'Luminous Fish Hook', 'High brightness, sharp and durable', 24.99, 'Hook', '/images/hook1.jpg', 350, 4.6, 150),
+(22, 'Smart Bite Alarm', 'Sound alarm, easy to operate', 99.99, 'Electronics', '/images/bite1.jpg', 90, 4.7, 135),
+(23, 'High Sensitivity Float', 'Accurate detection, high sensitivity', 49.99, 'Tool', '/images/bascket1.jpg', 250, 4.5, 115),
+(24, 'Mosquito-proof Fishing Suit', 'Mosquito-proof, breathable, comfortable and durable', 349.99, 'Clothing', '/images/cloth1.jpg', 85, 4.4, 75),
+(25, 'Outdoor Multi-functional Knife', 'Sharp, portable, multi-purpose', 129.99, 'Tool', '/images/chair.jpg', 140, 4.8, 110),
+(26, 'Large Fishing Bucket', 'Waterproof, insulated, durable', 99.99, 'Tool', '/images/chair.jpg', 95, 4.5, 80),
+(27, 'Bait Storage Box', 'Sealed and moisture-proof, easy to carry', 39.99, 'Tool', '/images/bait1.jpg', 320, 4.4, 25),
+(28, 'Lightweight Fishing Rod', 'Made of carbon fiber, portable and durable', 249.99, 'Rod', '/images/rod1.jpg', 80, 4.7, 75),
+(29, 'Competitive Fishing Line', 'High strength, low elongation', 59.99, 'Line', '/images/line1.jpg', 180, 4.6, 30),
+(30, 'Fishing Rod Protection Cover', 'Soft, wear-resistant, protects the rod', 29.99, 'Tool', '/images/box1.jpg', 210, 4.3, 90),
+(31, 'Folding Fish Basket', 'Portable, easy to store, large capacity', 79.99, 'Tool', '/images/bascket1.jpg', 120, 4.4, 90),
+(32, 'Outdoor Fishing Hat', 'Windproof, sun protection, breathable design', 99.99, 'Clothing', '/images/hat1.jpg', 150, 4.3, 140),
+(33, 'LED Fishing Float Light', 'Energy-saving, high brightness, essential for night fishing', 19.99, 'Tool', '/images/bascket1.jpg', 400, 4.5, 60),
+(34, 'Bait Dehydrator', 'Highly effective moisture absorption, keeps bait dry', 9.99, 'Tool', '/images/bait1.jpg', 500, 4.3, 130),
+(35, 'Waterproof Phone Case', 'Protects phone, easy to use', 39.99, 'Tool', '/images/bascket1.jpg', 150, 4.4, 150),
+(36, 'Fishing Line Cutter', 'Sharp, durable, safe and easy to use', 29.99, 'Tool', '/images/chair.jpg', 250, 4.6, 60),
+(37, 'Fishing Goggles', 'Anti-glare, high-definition vision', 179.99, 'Clothing', '/images/hat1.jpg', 60, 4.5, 90),
+(38, 'Fishing Seat Cushion', 'Soft, comfortable, lightweight and durable', 89.99, 'Tool', '/images/chair.jpg', 100, 4.4, 90),
+(39, 'Premium Bait', 'Nutritious, highly attractive', 39.99, 'Bait', '/images/bait1.jpg', 350, 4.5, 80),
+(40, 'Underwater Camera', 'High-definition image, easy to operate', 1199.99, 'Electronics', '/images/bite1.jpg', 20, 4.8, 85),
+(41, 'Fishing Headlamp', 'Multi-level adjustable, waterproof design', 59.99, 'Tool', '/images/bascket1.jpg', 140, 4.6, 60),
+(42, 'Ice Fishing Tool Set', 'Complete set of equipment, one-stop service', 899.99, 'Tool', '/images/chair.jpg', 25, 4.9, 80),
+(43, 'Sun Protection Ice Sleeves', 'Breathable, comfortable, excellent sun protection', 19.99, 'Clothing', '/images/hat1.jpg', 180, 4.3, 40),
+(44, 'High Sensitivity Night Fishing Float', 'Sensitive and bright, essential for night fishing', 29.99, 'Tool', '/images/bascket1.jpg', 250, 4.5, 135),
+(45, 'Fishing Gloves', 'Non-slip, durable, comfortable fit', 49.99, 'Clothing', '/images/hat1.jpg', 120, 4.4, 60),
+(46, 'Sea Fishing Tackle Set', 'Professional configuration, must-have for sea fishing', 1599.99, 'Tool', '/images/bite1.jpg', 30, 4.8, 50),
+(47, 'Fishing Spear', 'Durable, lightweight, and precise', 129.99, 'Tool', '/images/rod1.jpg', 40, 4.7, 85),
+(48, 'Fishing Net', 'Lightweight, portable and durable', 49.99, 'Tool', '/images/chair.jpg', 400, 4.6, 120),
+(49, 'Fishing Thermos', 'Keeps warm, large capacity', 79.99, 'Tool', '/images/bascket1.jpg', 160, 4.5, 70),
+(50, 'Fishing Knife', 'Sharp and durable, multipurpose', 29.99, 'Tool', '/images/box1.jpg', 180, 4.6, 95);
 
--- 创建库存
+-- Create inventory
 INSERT INTO store_inventory (store_id, product_id, quantity) 
 VALUES
 (1, 1, 50), (1, 2, 100), (1, 3, 200), (1, 4, 30), (1, 5, 25),
@@ -464,7 +486,7 @@ VALUES
 
 
 
--- 创建供应商产品关联
+-- Create supplier-product association
 INSERT INTO supplier_products (supplier_id, product_id, supply_price) 
 VALUES
 (1, 12, 200.00), (1, 23, 150.00), (1, 5, 120.00), (1, 17, 90.00), (1, 8, 80.00),
@@ -493,7 +515,7 @@ VALUES
 (33, 16, 105.00), (34, 17, 89.00), (34, 18, 76.00), (34, 19, 98.00), (34, 20, 115.00);
 
 
--- 创建购物车项目
+-- Create shopping cart item
 INSERT INTO cart_items (user_id, product_id, quantity) 
 VALUES
 (23, 37, 2),
@@ -543,7 +565,7 @@ VALUES
 
 
 
--- 创建订单
+-- Create order
 INSERT INTO orders (order_no, user_id, store_id, total_amount, status, created_at) 
 VALUES 
 ('ORD202301051', 5, 2, 500, 'completed', '2023-03-01 10:00:00'),
@@ -580,76 +602,76 @@ VALUES
 
 
 
--- 创建订单项目
+-- Create order items
 INSERT INTO order_items (order_no, product_id, quantity, price)
 VALUES
-('ORD202301051', 1, 2, 200),  -- 商品1，单价100，数量2，总价200
-('ORD202301051', 2, 3, 300),  -- 商品2，单价100，数量3，总价300
-('ORD202301052', 3, 1, 100),  -- 商品3，单价100，数量1，总价100
-('ORD202301052', 4, 5, 250),  -- 商品4，单价50，数量5，总价250
-('ORD202301053', 5, 4, 200),  -- 商品5，单价50，数量4，总价200
-('ORD202301053', 6, 2, 260),  -- 商品6，单价87，数量3，总价260
-('ORD202301054', 7, 5, 300),  -- 商品7，单价60，数量5，总价300
-('ORD202301054', 8, 2, 100),  -- 商品8，单价50，数量2，总价100
-('ORD202301054', 9, 1, 200),  -- 商品9，单价200，数量1，总价200
-('ORD202301055', 10, 3, 270), -- 商品10，单价90，数量3，总价270
-('ORD202301055', 11, 2, 130), -- 商品11，单价65，数量2，总价130
-('ORD202301056', 12, 4, 200), -- 商品12，单价50，数量4，总价200
-('ORD202301056', 13, 2, 180), -- 商品13，单价90，数量2，总价180
-('ORD202301056', 14, 1, 100), -- 商品14，单价100，数量1，总价100
-('ORD202301057', 15, 5, 250), -- 商品15，单价50，数量5，总价250
-('ORD202301057', 16, 2, 110), -- 商品16，单价55，数量2，总价110
-('ORD202301057', 17, 1, 100), -- 商品17，单价100，数量1，总价100
-('ORD202301058', 18, 3, 90),  -- 商品18，单价30，数量3，总价90
-('ORD202301058', 19, 1, 210), -- 商品19，单价210，数量1，总价210
-('ORD202301059', 20, 4, 160), -- 商品20，单价40，数量4，总价160
-('ORD202301059', 21, 3, 300), -- 商品21，单价100，数量3，总价300
-('ORD202301060', 22, 3, 270), -- 商品22，单价90，数量3，总价270
-('ORD202301060', 23, 2, 230), -- 商品23，单价115，数量2，总价230
-('ORD202301061', 24, 3, 150), -- 商品24，单价50，数量3，总价150
-('ORD202301061', 25, 2, 220), -- 商品25��单价110，数量2，总价220
-('ORD202301062', 26, 2, 160), -- 商品26，单价80，数量2，总价160
-('ORD202301062', 27, 1, 50),  -- 商品27，单价50，数量1，总价50
-('ORD202301063', 28, 2, 150), -- 商品28，单价75，数量2，总价150
-('ORD202301064', 29, 3, 90),  -- 商品29，单价30，���量3，总价90
-('ORD202301064', 30, 2, 210), -- 商品30，单价105，数量2，总价210
-('ORD202301065', 31, 2, 180), -- 商品31，单价90，数量2，总价180
-('ORD202301065', 32, 5, 280), -- 商品32，单价56，数量5，总价280
-('ORD202301066', 33, 2, 120), -- 商品33，单价60，数量2，总价120
-('ORD202301066', 34, 2, 260), -- 商品34，单价130，数量2，总价260
-('ORD202301067', 35, 1, 150), -- 商品35，单价150，数量1，总价150
-('ORD202301068', 36, 4, 240), -- 商品36，单价60，数量4，总价240
-('ORD202301068', 37, 2, 180), -- 商品37，单价90，数量2，总价180
-('ORD202301068', 38, 2, 180), -- 商品38，单价90，数量2，总价180
-('ORD202301069', 39, 2, 160), -- 商品39，单价80，数量2，总价160
-('ORD202301069', 40, 2, 170), -- 商品40，单价85，数量2，总价170
-('ORD202301070', 41, 4, 240), -- 商品41，单价60，数量4，总价240
-('ORD202301070', 42, 2, 160), -- 商品42，单价80，数量2，总价160
-('ORD202301071', 43, 3, 120), -- 商品43，单价40，数量3，总价120
-('ORD202301071', 44, 2, 270), -- 商品44，单价135，数量2，总价270
-('ORD202301072', 45, 4, 240), -- 商品45，单价60，数量4，总价240
-('ORD202301072', 46, 3, 300), -- 商品46，单价100，数量3，总价300
-('ORD202301073', 47, 2, 100), -- 商品47，单价50，数量2，总价100
-('ORD202301073', 48, 2, 170), -- 商品48，单价85，数量2，总价170
-('ORD202301074', 49, 3, 210), -- 商品49，单价70，数量3，总价210
-('ORD202301074', 50, 2, 170), -- 商品50，单价85，数量2，总价170
-('ORD202301075', 1, 3, 300),  
-('ORD202301075', 2, 2, 100),  
-('ORD202301076', 3, 4, 400), 
-('ORD202301076', 4, 2, 100),  
-('ORD202301077', 5, 3, 150),  
-('ORD202301077', 6, 2, 260),  
-('ORD202301078', 7, 2, 120),  
-('ORD202301078', 8, 4, 200),  
-('ORD202301079', 9, 5, 1000), 
-('ORD202301079', 10, 3, 270), 
-('ORD202301079', 11, 2, 130), 
-('ORD202301080', 12, 2, 100), 
-('ORD202301080', 13, 2, 180); 
+('ORD202301051', 1, 2, 200),  -- Product 1, unit price 100, quantity 2, total price 200
+('ORD202301051', 2, 3, 300),  -- Product 2, unit price 100, quantity 3, total price 300
+('ORD202301052', 3, 1, 100),  -- Product 3, unit price 100, quantity 1, total price 100
+('ORD202301052', 4, 5, 250),  -- Product 4, unit price 50, quantity 5, total price 250
+('ORD202301053', 5, 4, 200),  -- Product 5, unit price 50, quantity 4, total price 200
+('ORD202301053', 6, 2, 260),  -- Product 6, unit price 87, quantity 3, total price 260
+('ORD202301054', 7, 5, 300),  -- Product 7, unit price 60, quantity 5, total price 300
+('ORD202301054', 8, 2, 100),  -- Product 8, unit price 50, quantity 2, total price 100
+('ORD202301054', 9, 1, 200),  -- Product 9, unit price 200, quantity 1, total price 200
+('ORD202301055', 10, 3, 270), -- Product 10, unit price 90, quantity 3, total price 270
+('ORD202301055', 11, 2, 130), -- Product 11, unit price 65, quantity 2, total price 130
+('ORD202301056', 12, 4, 200), -- Product 12, unit price 50, quantity 4, total price 200
+('ORD202301056', 13, 2, 180), -- Product 13, unit price 90, quantity 2, total price 180
+('ORD202301056', 14, 1, 100), -- Product 14, unit price 100, quantity 1, total price 100
+('ORD202301057', 15, 5, 250), -- Product 15, unit price 50, quantity 5, total price 250
+('ORD202301057', 16, 2, 110), -- Product 16, unit price 55, quantity 2, total price 110
+('ORD202301057', 17, 1, 100), -- Product 17, unit price 100, quantity 1, total price 100
+('ORD202301058', 18, 3, 90),  -- Product 18, unit price 30, quantity 3, total price 90
+('ORD202301058', 19, 1, 210), -- Product 19, unit price 210, quantity 1, total price 210
+('ORD202301059', 20, 4, 160), -- Product 20, unit price 40, quantity 4, total price 160
+('ORD202301059', 21, 3, 300), -- Product 21, unit price 100, quantity 3, total price 300
+('ORD202301060', 22, 3, 270), -- Product 22, unit price 90, quantity 3, total price 270
+('ORD202301060', 23, 2, 230), -- Product 23, unit price 115, quantity 2, total price 230
+('ORD202301061', 24, 3, 150), -- Product 24, unit price 50, quantity 3, total price 150
+('ORD202301061', 25, 2, 220), -- Product 25, unit price 110, quantity 2, total price 220
+('ORD202301062', 26, 2, 160), -- Product 26, unit price 80, quantity 2, total price 160
+('ORD202301062', 27, 1, 50),  -- Product 27, unit price 50, quantity 1, total price 50
+('ORD202301063', 28, 2, 150), -- Product 28, unit price 75, quantity 2, total price 150
+('ORD202301064', 29, 3, 90),  -- Product 29, unit price 30, quantity 3, total price 90
+('ORD202301064', 30, 2, 210), -- Product 30, unit price 105, quantity 2, total price 210
+('ORD202301065', 31, 2, 180), -- Product 31, unit price 90, quantity 2, total price 180
+('ORD202301065', 32, 5, 280), -- Product 32, unit price 56, quantity 5, total price 280
+('ORD202301066', 33, 2, 120), -- Product 33, unit price 60, quantity 2, total price 120
+('ORD202301066', 34, 2, 260), -- Product 34, unit price 130, quantity 2, total price 260
+('ORD202301067', 35, 1, 150), -- Product 35, unit price 150, quantity 1, total price 150
+('ORD202301068', 36, 4, 240), -- Product 36, unit price 60, quantity 4, total price 240
+('ORD202301068', 37, 2, 180), -- Product 37, unit price 90, quantity 2, total price 180
+('ORD202301068', 38, 2, 180), -- Product 38, unit price 90, quantity 2, total price 180
+('ORD202301069', 39, 2, 160), -- Product 39, unit price 80, quantity 2, total price 160
+('ORD202301069', 40, 2, 170), -- Product 40, unit price 85, quantity 2, total price 170
+('ORD202301070', 41, 4, 240), -- Product 41, unit price 60, quantity 4, total price 240
+('ORD202301070', 42, 2, 160), -- Product 42, unit price 80, quantity 2, total price 160
+('ORD202301071', 43, 3, 120), -- Product 43, unit price 40, quantity 3, total price 120
+('ORD202301071', 44, 2, 270), -- Product 44, unit price 135, quantity 2, total price 270
+('ORD202301072', 45, 4, 240), -- Product 45, unit price 60, quantity 4, total price 240
+('ORD202301072', 46, 3, 300), -- Product 46, unit price 100, quantity 3, total price 300
+('ORD202301073', 47, 2, 100), -- Product 47, unit price 50, quantity 2, total price 100
+('ORD202301073', 48, 2, 170), -- Product 48, unit price 85, quantity 2, total price 170
+('ORD202301074', 49, 3, 210), -- Product 49, unit price 70, quantity 3, total price 210
+('ORD202301074', 50, 2, 170), -- Product 50, unit price 85, quantity 2, total price 170
+('ORD202301075', 1, 3, 300),  -- Product 1, unit price 100, quantity 3, total price 300
+('ORD202301075', 2, 2, 100),  -- Product 2, unit price 50, quantity 2, total price 100
+('ORD202301076', 3, 4, 400),  -- Product 3, unit price 100, quantity 4, total price 400
+('ORD202301076', 4, 2, 100),  -- Product 4, unit price 50, quantity 2, total price 100
+('ORD202301077', 5, 3, 150),  -- Product 5, unit price 50, quantity 3, total price 150
+('ORD202301077', 6, 2, 260),  -- Product 6, unit price 130, quantity 2, total price 260
+('ORD202301078', 7, 2, 120),  -- Product 7, unit price 60, quantity 2, total price 120
+('ORD202301078', 8, 4, 200),  -- Product 8, unit price 50, quantity 4, total price 200
+('ORD202301079', 9, 5, 1000), -- Product 9, unit price 200, quantity 5, total price 1000
+('ORD202301079', 10, 3, 270), -- Product 10, unit price 90, quantity 3, total price 270
+('ORD202301079', 11, 2, 130), -- Product 11, unit price 65, quantity 2, total price 130
+('ORD202301080', 12, 2, 100), -- Product 12, unit price 50, quantity 2, total price 100
+('ORD202301080', 13, 2, 180); -- Product 13, unit price 90, quantity 2, total price 180
 
 
 
--- 创建综合订单视图
+-- Create comprehensive order view
 CREATE OR REPLACE VIEW order_comprehensive_view AS
 WITH order_base AS (
     SELECT 
@@ -706,7 +728,7 @@ LEFT JOIN products p ON oi.product_id = p.id
 CROSS JOIN users u
 LEFT JOIN employees e ON u.id = e.id;
 
--- 创建管理员仪表盘统计视图
+-- Create administrator dashboard statistics view
 CREATE OR REPLACE VIEW admin_dashboard_stats_view AS
 WITH date_range AS (
     SELECT CURDATE() - INTERVAL (a.a + (10 * b.a) + (100 * c.a)) DAY AS date
@@ -762,7 +784,7 @@ FROM (
 CROSS JOIN user_stats us
 CROSS JOIN store_stats ss;
 
--- 创建每日订单统计视图
+-- Create daily order statistics view
 CREATE OR REPLACE VIEW daily_order_stats_view AS
 SELECT 
     DATE(created_at) as date,
@@ -772,7 +794,7 @@ FROM orders
 WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
 GROUP BY DATE(created_at);
 
--- 创建用户认证视图
+-- CREATE OR REPLACE VIEW user_auth_view
 CREATE OR REPLACE VIEW user_auth_view AS
 SELECT 
     u.id,
@@ -794,7 +816,6 @@ SELECT
 FROM users u
 LEFT JOIN employees e ON u.id = e.id;
 
--- 创建购物车管理视图（包含库存信息）
 CREATE OR REPLACE VIEW cart_management_view AS
 SELECT 
     p.id as product_id,
@@ -808,16 +829,12 @@ SELECT
     ci.created_at,
     ci.updated_at
 FROM (
-    SELECT * FROM products WHERE deleted_at IS NULL
+    SELECT * FROM products WHERE is_deleted = 0 -- 排除逻辑删除的产品
 ) p
-LEFT JOIN cart_items ci ON p.id = ci.product_id;
+LEFT JOIN cart_items ci ON p.id = ci.product_id AND ci.is_deleted = 0; -- 排除逻辑删除的购物车项
 
--- 删除原有���员工相关视图
-DROP VIEW IF EXISTS employee_orders_view;
-DROP VIEW IF EXISTS employee_inventory_view;
-DROP VIEW IF EXISTS employee_info_view;
 
--- 创建综合员工视图
+-- CREATE OR REPLACE VIEW employee_comprehensive_view
 CREATE OR REPLACE VIEW employee_comprehensive_view AS
 WITH product_info AS (
     SELECT 
@@ -896,7 +913,7 @@ LEFT JOIN order_info oi ON e.store_id = oi.store_id
 LEFT JOIN product_info pi ON e.store_id = pi.store_id
 WHERE u.role = 'employee';
 
--- 创建综合产品视图
+-- CREATE OR REPLACE VIEW product_comprehensive_view
 CREATE OR REPLACE VIEW product_comprehensive_view AS
 SELECT 
     p.id,
@@ -929,7 +946,7 @@ LEFT JOIN stores s ON si.store_id = s.id
 LEFT JOIN supplier_products sp ON p.id = sp.product_id
 LEFT JOIN suppliers sup ON sp.supplier_id = sup.id;
 
--- 创建产品管理视图
+-- CREATE OR REPLACE VIEW product_management_view
 CREATE OR REPLACE VIEW product_management_view AS
 WITH store_inventory_info AS (
     SELECT 
@@ -968,7 +985,6 @@ LEFT JOIN store_inventory_info si ON p.id = si.product_id
 LEFT JOIN supplier_products sp ON p.id = sp.product_id
 LEFT JOIN suppliers sup ON sp.supplier_id = sup.id;
 
--- 创建商店管理视图
 CREATE OR REPLACE VIEW store_management_view AS
 WITH store_stats AS (
     SELECT 
@@ -978,10 +994,11 @@ WITH store_stats AS (
         COALESCE(SUM(o.total_amount), 0) as total_sales,
         COUNT(DISTINCT si.product_id) as product_count,
         COALESCE(SUM(si.quantity), 0) as total_inventory
-FROM stores s
-    LEFT JOIN employees e ON s.id = e.store_id
-LEFT JOIN orders o ON s.id = o.store_id
-    LEFT JOIN store_inventory si ON s.id = si.store_id
+    FROM stores s
+    LEFT JOIN employees e ON s.id = e.store_id AND e.is_deleted = 0 -- 排除逻辑删除的员工
+    LEFT JOIN orders o ON s.id = o.store_id AND o.is_deleted = 0 -- 排除逻辑删除的订单
+    LEFT JOIN store_inventory si ON s.id = si.store_id AND si.is_deleted = 0 -- 排除逻辑删除的库存
+    WHERE s.is_deleted = 0 -- 排除逻辑删除的商店
     GROUP BY s.id
 )
 SELECT 
@@ -1000,14 +1017,18 @@ SELECT
     GROUP_CONCAT(DISTINCT p.name) as product_names
 FROM stores s
 LEFT JOIN store_stats ss ON s.id = ss.store_id
-LEFT JOIN employees e ON s.id = e.store_id
-LEFT JOIN store_inventory si ON s.id = si.store_id
+LEFT JOIN employees e ON s.id = e.store_id AND e.is_deleted = 0 -- 排除逻辑删除的员工
+LEFT JOIN store_inventory si ON s.id = si.store_id AND si.is_deleted = 0 -- 排除逻辑删除的库存
 LEFT JOIN products p ON si.product_id = p.id
+WHERE s.is_deleted = 0 -- 排除逻辑删除的商店
 GROUP BY 
     s.id, s.name, s.address, s.phone, s.created_at, s.updated_at,
     ss.employee_count, ss.order_count, ss.total_sales, ss.product_count, ss.total_inventory;
 
--- 创建供应商综合视图
+
+
+
+-- CREATE OR REPLACE VIEW supplier_comprehensive_view
 CREATE OR REPLACE VIEW supplier_comprehensive_view AS
 WITH supplier_stats AS (
     SELECT 
@@ -1074,10 +1095,10 @@ LEFT JOIN products p ON sp.product_id = p.id
 LEFT JOIN supplier_orders_info soi ON s.id = soi.supplier_id
 WHERE u.role = 'supplier';
 
--- 恢复外键检查
+-- SET FOREIGN_KEY_CHECKS
 SET FOREIGN_KEY_CHECKS=1;
 
--- 创建供应订单测试数据
+-- INSERT INTO supply_orders
 INSERT INTO supply_orders (order_no, supplier_id, store_id, total_amount, status, created_at) 
 VALUES
 ('SUPPLY2023120101_30', 30, 1, 2000.00, 'completed', '2023-12-01 10:00:00'),
@@ -1096,7 +1117,7 @@ VALUES
 ('SUPPLY2023120114_34', 34, 14, 2900.00, 'shipping', '2023-12-02 11:00:00'),
 ('SUPPLY2023120115_34', 34, 15, 2100.00, 'pending', '2023-12-02 12:00:00');
 
--- 创建供应订单项目测试数据
+-- INSERT INTO supply_order_items
 INSERT INTO supply_order_items (order_no, product_id, quantity, supply_price)
 VALUES
 ('SUPPLY2023120101_30', 1, 10, 100.00),

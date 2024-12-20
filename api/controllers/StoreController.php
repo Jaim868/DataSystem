@@ -170,40 +170,25 @@ class StoreController {
             // 开启事务
             $this->db->beginTransaction();
 
-            // 检查商店是否存在
-            $checkStmt = $this->db->prepare("SELECT id FROM stores WHERE id = ?");
-            $checkStmt->execute([$id]);
-            if (!$checkStmt->fetch()) {
-                throw new Exception("商店不存在");
+            // 检查商店是否存在且未被删除
+            $checkStmt = $this->db->prepare("SELECT id FROM stores WHERE id = :id AND is_deleted = 0");
+            $checkStmt->execute(['id' => $id]);
+            $store = $checkStmt->fetch();
+
+            if (!$store) {
+                throw new Exception("商店不存在或已被删除");
             }
 
-            // 检查是否有关联的员工
-            $employeeStmt = $this->db->prepare("SELECT COUNT(*) FROM employees WHERE store_id = ?");
-            $employeeStmt->execute([$id]);
-            if ($employeeStmt->fetchColumn() > 0) {
-                throw new Exception("无法删除商店，该商店还有员工");
-            }
+            // 执行逻辑删除
+            $deleteStmt = $this->db->prepare("
+            UPDATE stores 
+            SET is_deleted = 1, deleted_at = NOW() 
+            WHERE id = :id
+        ");
+            $deleteSuccess = $deleteStmt->execute(['id' => $id]);
 
-            // 检查是否有未完成的订单
-            $orderStmt = $this->db->prepare("
-                SELECT COUNT(*) FROM orders 
-                WHERE store_id = ? AND status IN ('pending', 'processing')
-            ");
-            $orderStmt->execute([$id]);
-            if ($orderStmt->fetchColumn() > 0) {
-                throw new Exception("无法删除商店，该商店还有未完成的订单");
-            }
-
-            // 删除商店的库存记录
-            $inventoryStmt = $this->db->prepare("DELETE FROM store_inventory WHERE store_id = ?");
-            $inventoryStmt->execute([$id]);
-
-            // 删除商店
-            $stmt = $this->db->prepare("DELETE FROM stores WHERE id = ?");
-            $stmt->execute([$id]);
-
-            if ($stmt->rowCount() === 0) {
-                throw new Exception("删除失败");
+            if (!$deleteSuccess) {
+                throw new Exception("逻辑删除商店失败");
             }
 
             // 提交事务
@@ -211,14 +196,15 @@ class StoreController {
 
             return [
                 'success' => true,
-                'message' => '商店删除成功'
+                'message' => '商店已被标记为删除',
             ];
         } catch (Exception $e) {
             // 回滚事务
             $this->db->rollBack();
+
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
